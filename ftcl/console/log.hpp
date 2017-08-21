@@ -29,6 +29,11 @@ namespace ftcl { namespace console {
         void enableMultiThreads( ) noexcept;
         void disableMultiThreads( ) noexcept;
 
+        void enableOutputTime( ) noexcept;
+        void disableOutputTime( ) noexcept;
+
+        void set( const std::string &__path );
+
         std::string getCurrentTime( ) const noexcept;
 
     protected:
@@ -37,9 +42,10 @@ namespace ftcl { namespace console {
         bool consoleEnabled = true;
         bool multiThreadsEnabled = false;
         bool exit = false;
+        bool timeEnabled = true;
 
         std::ofstream file;
-        std::ostringstream console;
+        std::string path = "log.txt";
 
         queue< std::string > queueStream{ 100 };
         multithread::queue< std::string > multiQueueStream{ 100 };
@@ -48,6 +54,7 @@ namespace ftcl { namespace console {
         Logger( );
         ~Logger( );
 
+        void runMultiThread( );
         void run( );
 
         friend inline Logger& operator<<( Logger &logger, const std::string &str );

@@ -11,7 +11,11 @@ namespace ftcl { namespace console {
 
     Logger::Logger( )
     {
-        thread = new std::thread( &Logger::run, this );
+        file.open( path, std::ios::app );
+        if( multiThreadsEnabled )
+            thread = new std::thread( &Logger::runMultiThread, this );
+        else
+            thread = new std::thread( &Logger::run, this );
     }
 
     Logger::~Logger( )
@@ -20,14 +24,34 @@ namespace ftcl { namespace console {
         thread -> join( );
     }
 
-    void Logger::run( )
+    void Logger::runMultiThread( )
     {
         while( ( !exit ) || ( !multiQueueStream.empty( ) ) )
         {
             if( !multiQueueStream.empty( ) )
             {
-                std::cout << multiQueueStream.back( );
+                if( fileEnabled )
+                    file << multiQueueStream.back( );
+                if( consoleEnabled )
+                    std::cout << multiQueueStream.back( );
                 multiQueueStream.pop( );
+            }
+            else
+                std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+        }
+    }
+
+    void Logger::run( )
+    {
+        while( ( !exit ) || ( !queueStream.empty( ) ) )
+        {
+            if( !queueStream.empty( ) )
+            {
+                if( fileEnabled )
+                    file << queueStream.back( );
+                if( consoleEnabled )
+                    std::cout << queueStream.back( );
+                queueStream.pop( );
             }
             else
                 std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
@@ -62,23 +86,64 @@ namespace ftcl { namespace console {
 
     void Logger::enableMultiThreads( ) noexcept
     {
-        multiThreadsEnabled = true;
+        if( !multiThreadsEnabled )
+        {
+            exit = true;
+            thread->join( );
+            delete thread;
+            multiThreadsEnabled = true;
+            exit = false;
+            thread = new std::thread( &Logger::runMultiThread, this );
+        }
     }
 
     void Logger::disableMultiThreads( ) noexcept
     {
-        multiThreadsEnabled = false;
+        if( multiThreadsEnabled )
+        {
+            exit = true;
+            thread->join( );
+            delete thread;
+            multiThreadsEnabled = false;
+            exit = false;
+            thread = new std::thread( &Logger::runMultiThread, this );
+        }
+    }
+
+    void Logger::enableOutputTime( ) noexcept
+    {
+        timeEnabled = true;
+    }
+
+    void Logger::disableOutputTime( ) noexcept
+    {
+        timeEnabled = false;
+    }
+
+    void Logger::set(const std::string &__path)
+    {
+        path = __path;
+        if( file.is_open( ) )
+        {
+            file.close( );
+            file.open( __path, std::ios::app );
+        }
     }
 
     std::string Logger::getCurrentTime( ) const noexcept
     {
-        auto now = std::chrono::system_clock::now( );
-        auto now_c = std::chrono::system_clock::to_time_t( now );
-        std::stringstream ss;
-        ss << "[ "
-           << std::put_time( std::localtime( &now_c ), "%Y-%m-%d %X" )
-           << " ] ";
-        return ss.str( );
+        if( timeEnabled )
+        {
+            auto now = std::chrono::system_clock::now( );
+            auto now_c = std::chrono::system_clock::to_time_t( now );
+            std::stringstream ss;
+            ss << "[ "
+               << std::put_time( std::localtime( &now_c ), "%Y-%m-%d %X" )
+               << " ] ";
+            return ss.str( );
+        }
+        else
+            return std::string{ };
     }
 
 
@@ -88,19 +153,28 @@ namespace ftcl { namespace console {
 
     Logger& operator<<( Logger &logger, const std::string &str )
     {
-        logger.multiQueueStream.push( str );
+        if( logger.multiThreadsEnabled )
+            logger.multiQueueStream.push( str );
+        else
+            logger.queueStream.push( str );
         return logger;
     }
 
     Logger& operator<<( Logger &logger, const char* str )
-    {
-        logger.multiQueueStream.push( std::string{ str } );
+    {   
+        if( logger.multiThreadsEnabled )
+            logger.multiQueueStream.push( std::string{ str } );
+        else
+            logger.queueStream.push( std::string{ str } );
         return logger;
     }
 
     Logger& endl( Logger& logger )
     {
-        logger.multiQueueStream.push( std::string{ "\n" } );
+        if( logger.multiThreadsEnabled )
+            logger.multiQueueStream.push( std::string{ "\n" } );
+        else
+            logger.queueStream.push( std::string{ "\n" } );
         return logger;
     }
 
@@ -123,13 +197,6 @@ namespace ftcl { namespace console {
         stream << std::endl;
         Logger::Instance( ) <<  Logger::Instance( ).getCurrentTime( ) + stream.str( );
     }
-
-
-
-
-
-
-
 
 
 
