@@ -21,10 +21,7 @@ else()
     endif()
 endif()
 
-set(
-        FTCL_LIB
-        ${CMAKE_BINARY_DIR}/src/lib${PROJECT_NAME}.dylib
-    )
+
 
 include_directories(${CMAKE_SOURCE_DIR} ${GTEST_INCLUDE_DIR})
 add_compile_options(-std=c++11)
@@ -42,3 +39,6 @@ add_test(testMultiQueue testMultiQueue)
 
 add_executable(testLog testLog.cpp)
 add_test(testLog testLog)
+
+add_executable(testNetworkModule testNetworkModule.cpp)
+add_test(NAME testNetworkModule COMMAND ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} "2" "./testNetworkModule")

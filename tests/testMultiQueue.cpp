@@ -7,11 +7,14 @@
 TEST( Queue, empty )
 {
     ftcl::multithread::queue< int > queue( 5 );
+    EXPECT_EQ( queue.size( ), 0 );
     EXPECT_TRUE( queue.empty( ) );
     queue.push( 1 );
+    EXPECT_EQ( queue.size( ), 1 );
     EXPECT_FALSE( queue.empty( ) );
     queue.pop( );
     EXPECT_TRUE( queue.empty( ) );
+    EXPECT_EQ( queue.size( ), 0 );
 }
 
 TEST( Queue, push )
@@ -130,6 +133,16 @@ TEST( Queue, pushMulti )
 
     for( auto &elem : threads )
         elem.join( );
+}
+
+TEST( MultiQueue, empty )
+{
+    ftcl::multithread::queue< int > queue( 100 );
+    EXPECT_TRUE( queue.empty( ) );
+    queue.push( 10 );
+    EXPECT_FALSE( queue.empty( ) );
+    queue.pop( );
+    EXPECT_TRUE( queue.empty( ) );
 }
 
 int main( int argc, char *argv[ ] )

@@ -1,23 +1,43 @@
 set(HEADERS
-    network.cpp
     console/log.cpp
-    network.hpp
     queue.hpp
     exception.hpp
     console/log.hpp
     ftcl.hpp
     multithread/queue.hpp
+    sheduler/sheduler.hpp
 )
 
-find_package(Mpi REQUIRED)
+find_package(Mpi)
+
+set(FTCL_COMPILE_OPTIONS
+        -std=c++11
+    )
+
+set(FTCL_LIBRARIES
+    )
+
+set(FTCL_DEFINITION
+   )
+
+if(MPI_CXX_FOUND)
+    list(APPEND FTCL_DEFINITION -DFTCL_MPI_INCLUDED)
+    list(APPEND FTCL_LIBRARIES ${MPI_CXX_LIBRARIES})
+    list(APPEND HEADERS
+            network.cpp
+            network.hpp
+        )
+endif()
 
 add_library(${PROJECT_NAME} SHARED ${HEADERS})
-target_link_libraries(${PROJECT_NAME} PUBLIC ${MPI_CXX_LIBRARIES})
-target_compile_options(${PROJECT_NAME} PUBLIC -std=c++11 )
+target_link_libraries(${PROJECT_NAME} PUBLIC ${FTCL_LIBRARIES})
 target_include_directories(
         ${PROJECT_NAME}
         PUBLIC ${MPI_CXX_INCLUDE_PATH} ${CMAKE_SOURCE_DIR}
     )
+target_compile_options(${PROJECT_NAME} PUBLIC ${FTCL_COMPILE_OPTIONS})
+target_compile_definitions(${PROJECT_NAME} PUBLIC ${FTCL_DEFINITION})
+
 
 include(FindPkgConfig)
 

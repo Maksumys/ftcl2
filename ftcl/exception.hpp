@@ -21,7 +21,7 @@ namespace ftcl
 
         const char* what( ) const noexcept override
         {
-            return textEx.c_str( );
+            return std::string{ textEx + " " + fileEx + " " + std::to_string( lineEx ) }.c_str( );
         }
     };
 
@@ -40,8 +40,47 @@ namespace ftcl
         {
         public:
             Queue_empty(
-                std::string __fileEx, std::size_t __lineEx
-            ) : Exception( std::string{ "Queue is empty" }, __fileEx, __lineEx ) { }
+                    std::string __fileEx, std::size_t __lineEx
+                ) : Exception( std::string{ "Queue is empty" }, __fileEx, __lineEx ) { }
+        };
+
+        class Illegal_size_recv_message :  public Exception
+        {
+        public:
+            Illegal_size_recv_message(
+                    std::string __fileEx,
+                    std::size_t __lineEx
+                ) : Exception(
+                            std::string{ "Illegal size message" },
+                            __fileEx,
+                            __lineEx
+                        ) { }
+        };
+
+        class Illegal_rank : public Exception
+        {
+        public:
+            Illegal_rank(
+                    std::string __fileEx,
+                    std::size_t __lineEx
+                ) : Exception(
+                            std::string{ "Illegal rank" },
+                            __fileEx,
+                            __lineEx
+                        ) { }
+        };
+
+        class Error_worker_logger : public Exception
+        {
+        public:
+            Error_worker_logger(
+                    std::string __fileEx,
+                    std::size_t __lineEx
+                ) : Exception(
+                            std::string{ "Logger can't send log message on master!" },
+                            __fileEx,
+                            __lineEx
+                        ) { }
         };
     }
 }

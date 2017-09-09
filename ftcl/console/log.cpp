@@ -1,126 +1,283 @@
 #include "log.hpp"
+#include "ftcl/network.hpp"
 
 #include <chrono>
 #include <ctime>
 #include <sstream>
 #include <iomanip>
 #include <string>
-
+#include <list>
 
 namespace ftcl { namespace console {
 
     Logger::Logger( )
     {
         file.open( path, std::ios::app );
-        if( multiThreadsEnabled )
-            thread = new std::thread( &Logger::runMultiThread, this );
-        else
-            thread = new std::thread( &Logger::run, this );
+        RUNLOGGER
     }
 
     Logger::~Logger( )
     {
         exit = true;
-        thread -> join( );
+        WAITLOGGER
+        #ifdef FTCL_MPI_INCLUDED
+        if( fail )
+        {
+            std::cout << "FAIL LOG EXIT" << std::endl;
+            MPI_Abort( MPI_COMM_WORLD, 0 );
+        }
+        #endif
     }
 
-    void Logger::runMultiThread( )
+
+#ifdef FTCL_MPI_INCLUDED
+    void Logger::runMaster( )
     {
-        while( ( !exit ) || ( !multiQueueStream.empty( ) ) )
+        if( !NetworkModule::Instance( ).master( ) )
+            throw exception::Illegal_rank( __FILE__, __LINE__ );
+
+        while( runAllowMaster( ) )
         {
-            if( !multiQueueStream.empty( ) )
+            if( !empty( ) )
             {
-                if( fileEnabled )
-                    file << multiQueueStream.back( );
-                if( consoleEnabled )
-                    std::cout << multiQueueStream.back( );
-                multiQueueStream.pop( );
+                FILE_OUTPUT
+                CONSOLE_OUTPUT
+                MESSAGE_POP
+
+                auto check = NetworkModule::Instance( ).checkMessage( -1, TypeMessage::MessageLog );
+                if( std::get< 0 >( check ) )
+                {
+                    auto msg = NetworkModule::Instance( ).getMessage( std::get< 1 >( check ) );
+                    std::copy( msg.begin( ), msg.end( ), std::ostream_iterator< char >( std::cout, "" ) );
+                }
             }
-            else
-                std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+
+            if( exit )
+            {
+                std::list< MPI_Request > vectorRequest;
+                for( int i = 0; i < NetworkModule::Instance( ).getSize( ) - 1; i++ )
+                {
+                    vectorRequest.push_back( NetworkModule::Instance( ).send( " ", i, TypeMessage::MessageLogExit ) );
+                }
+
+                std::size_t count = 0;
+                auto start = std::chrono::steady_clock::now( );
+                while( count < vectorRequest.size( ) )
+                {
+                    MPI_Status status;
+                    int flag;
+                    std::list< MPI_Request >::iterator it;
+                    while( it != vectorRequest.end( ) )
+                    {
+                        MPI_Test( &*it, &flag, &status );
+                        if( flag )
+                        {
+                            count++;
+                            it = vectorRequest.erase( it );
+                        }
+                    }
+                    std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+
+                    auto end = std::chrono::steady_clock::now( );
+                    if( std::chrono::duration_cast< std::chrono::seconds >( end - start ).count( ) > 5 )
+                    {
+                        for( auto &elem : vectorRequest )
+                            MPI_Cancel( &elem );
+
+                        fail = true;
+                        break;
+                    }
+                }
+
+                std::size_t countRecv = 0;
+                start = std::chrono::steady_clock::now( );
+
+                while( countRecv < count )
+                {
+                    auto check = NetworkModule::Instance( ).checkMessage( -1, TypeMessage::MessageLogExit );
+                    if( std::get< 0 >( check ) )
+                    {
+                        NetworkModule::Instance( ).getMessage( std::get< 1 >( check ) );
+                        countRecv++;
+                    }
+                    std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+                    auto end = std::chrono::steady_clock::now( );
+                    if( std::chrono::duration_cast< std::chrono::seconds >( end - start ).count( ) > 5 )
+                    {
+                        fail = true;
+                        allLoggersClosed = true;
+                    }
+                }
+                allLoggersClosed = true;
+            }
+            std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
         }
     }
 
-    void Logger::run( )
+    void Logger::runWorker()
     {
-        while( ( !exit ) || ( !queueStream.empty( ) ) )
+        if( NetworkModule::Instance( ).master( ) )
+            throw exception::Illegal_rank( __FILE__, __LINE__ );
+        try
         {
-            if( !queueStream.empty( ) )
+            while( runAllowWorker( ) )
             {
-                if( fileEnabled )
-                    file << queueStream.back( );
-                if( consoleEnabled )
-                    std::cout << queueStream.back( );
-                queueStream.pop( );
+                if( !empty( ) )
+                {
+                    MPI_Request request;
+                    if( logMode == LogMode::singleThread )
+                        request = NetworkModule::Instance( ).send(
+                                queueStream.back( ), 0, TypeMessage::MessageLog
+                            );
+                    else
+                        request = NetworkModule::Instance( ).send(
+                                multiQueueStream.back( ), 0, TypeMessage::MessageLog
+                            );
+
+                    MPI_Status status;
+                    int flag;
+                    auto start = std::chrono::steady_clock::now( );
+                    while( true )
+                    {
+                        MPI_Test( &request, &flag, &status );
+                        if( flag == 1 )
+                        {
+                            break;
+                        }
+                        std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+                        auto end = std::chrono::steady_clock::now( );
+                        if( std::chrono::duration_cast< std::chrono::seconds >( end - start ).count( ) > 5 )
+                        {
+                            std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
+                            MPI_Cancel( &request );
+                            throw exception::Error_worker_logger( __FILE__, __LINE__ );
+                        }
+                    }
+                    MESSAGE_POP
+                }
             }
-            else
-                std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+        }
+        catch(...)
+        {
+            fail = true;
         }
     }
 
-    Logger& Logger::Instance( )
+    bool Logger::runAllowMaster( )
+    {
+        return runAllow( ) && !allLoggersClosed;
+    }
+
+    bool Logger::runAllowWorker( )
+    {
+        return runAllow( ) && !masterSendExit;
+    }
+
+#endif
+
+    bool
+    Logger::runAllow( )
+    {
+        return !empty( ) || !exit;
+    }
+
+    bool
+    Logger::empty( )
+    {
+        if( logMode == LogMode::singleThread )
+            return queueStream.empty( );
+        else
+            return multiQueueStream.empty( );
+    }
+
+    void
+    Logger::run( )
+    {
+        while( runAllow( ) )
+        {
+            if( !empty( ) )
+            {
+                FILE_OUTPUT
+                CONSOLE_OUTPUT
+                MESSAGE_POP
+            }
+            std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+        }
+    }
+
+    Logger&
+    Logger::Instance( )
     {
         static Logger log;
         return log;
     }
 
-    void Logger::enableFile( ) noexcept
+    void
+    Logger::enableFile( ) noexcept
     {
         fileEnabled = true;
     }
 
-    void Logger::disableFile( ) noexcept
+    void
+    Logger::disableFile( ) noexcept
     {
         fileEnabled = false;
     }
 
-    void Logger::enableConsole( ) noexcept
+    void
+    Logger::enableConsole( ) noexcept
     {
         consoleEnabled = true;
     }
 
-    void Logger::disableConsole( ) noexcept
+    void
+    Logger::disableConsole( ) noexcept
     {
         consoleEnabled = false;
     }
 
-    void Logger::enableMultiThreads( ) noexcept
+    void
+    Logger::enableMultiThreads( ) noexcept
     {
-        if( !multiThreadsEnabled )
+        if( logMode == LogMode::singleThread )
         {
             exit = true;
             thread->join( );
             delete thread;
-            multiThreadsEnabled = true;
+            logMode = LogMode::singleThread;
             exit = false;
-            thread = new std::thread( &Logger::runMultiThread, this );
+            thread = new std::thread( &Logger::run, this );
         }
     }
 
-    void Logger::disableMultiThreads( ) noexcept
+    void
+    Logger::disableMultiThreads( ) noexcept
     {
-        if( multiThreadsEnabled )
+        if( logMode == LogMode::multiThread )
         {
             exit = true;
             thread->join( );
             delete thread;
-            multiThreadsEnabled = false;
+            logMode = LogMode::singleThread;
             exit = false;
-            thread = new std::thread( &Logger::runMultiThread, this );
+            thread = new std::thread( &Logger::run, this );
         }
     }
 
-    void Logger::enableOutputTime( ) noexcept
+    void
+    Logger::enableOutputTime( ) noexcept
     {
         timeEnabled = true;
     }
 
-    void Logger::disableOutputTime( ) noexcept
+    void
+    Logger::disableOutputTime( ) noexcept
     {
         timeEnabled = false;
     }
 
-    void Logger::set(const std::string &__path)
+    void
+    Logger::setPath(const std::string &__path)
     {
         path = __path;
         if( file.is_open( ) )
@@ -130,7 +287,18 @@ namespace ftcl { namespace console {
         }
     }
 
-    std::string Logger::getCurrentTime( ) const noexcept
+    Level Logger::getLevel( )
+    {
+        return globalLevel;
+    }
+
+    void Logger::setLevel(const Level &__level)
+    {
+        globalLevel = __level;
+    }
+
+    std::string
+    Logger::getCurrentTime( ) const noexcept
     {
         if( timeEnabled )
         {
@@ -146,65 +314,126 @@ namespace ftcl { namespace console {
             return std::string{ };
     }
 
-
-
-
-
-
-    Logger& operator<<( Logger &logger, const std::string &str )
+    Logger&
+    operator<<( Logger &__logger, const LogMessage &__message )
     {
-        if( logger.multiThreadsEnabled )
-            logger.multiQueueStream.push( str );
-        else
-            logger.queueStream.push( str );
-        return logger;
-    }
+        std::string str = __message.time;
+#ifdef FTCL_MPI_INCLUDED
+        str += " << Node " + std::to_string( __message.numNode ) + " >> ";
+#endif
+        str +=  __message.color +
+                __message.stream.data( ) +
+                Color::RESET;
 
-    Logger& operator<<( Logger &logger, const char* str )
-    {   
-        if( logger.multiThreadsEnabled )
-            logger.multiQueueStream.push( std::string{ str } );
-        else
-            logger.queueStream.push( std::string{ str } );
-        return logger;
-    }
+        MESSAGE_PUSH
 
-    Logger& endl( Logger& logger )
-    {
-        if( logger.multiThreadsEnabled )
-            logger.multiQueueStream.push( std::string{ "\n" } );
-        else
-            logger.queueStream.push( std::string{ "\n" } );
-        return logger;
+        return __logger;
     }
 
 
 
 
-    inline Log& Log::operator<<( int value ) { stream << value; return *this; }
-    inline Log& Log::operator<<( long value ) { stream << value; return *this; }
-    inline Log& Log::operator<<( long long value ) { stream << value; return *this; }
-    inline Log& Log::operator<<( unsigned int value ) { stream << value; return *this; }
-    inline Log& Log::operator<<( unsigned long value ) { stream << value; return *this; }
-    inline Log& Log::operator<<( unsigned long long value ) { stream << value; return *this; }
-    inline Log& Log::operator<<( float value ) { stream << value; return *this; }
-    inline Log& Log::operator<<( double value ) { stream << value; return *this; }
-    inline Log& Log::operator<<( std::string &value ) { stream << value; return *this; }
-    Log& Log::operator<<( const char *value ) { stream << value; return *this; }
+    Log& Log::operator<<( int value ) { msg.stream += std::to_string( value ); return *this; }
+    Log& Log::operator<<( long value ) { msg.stream += std::to_string( value ); return *this; }
+    Log& Log::operator<<( long long value ) { msg.stream += std::to_string( value ); return *this; }
+    Log& Log::operator<<( unsigned int value ) { msg.stream += std::to_string( value ); return *this; }
+    Log& Log::operator<<( unsigned long value ) { msg.stream += std::to_string( value ); return *this; }
+    Log& Log::operator<<( unsigned long long int value ) { msg.stream += std::to_string( value ); return *this; }
+    Log& Log::operator<<( float value ) { msg.stream += std::to_string( value ); return *this; }
+    Log& Log::operator<<( double value ) { msg.stream += std::to_string( value ); return *this; }
+    Log& Log::operator<<( const std::string &value ) { msg.stream += value; return *this; }
 
     Log::~Log( )
     {
-        stream << std::endl;
-        Logger::Instance( ) <<  Logger::Instance( ).getCurrentTime( ) + stream.str( );
+        msg.stream += "\n";
+        msg.time = Color::BOLDCYAN + Logger::Instance( ).getCurrentTime( ) + Color::RESET;
+#ifdef FTCL_MPI_INCLUDED
+        msg.numNode  = NetworkModule::Instance( ).getRank( );
+#endif
+        bool allow = false;
+        levelToColor( allow );
+        if( allow )
+        {
+            Logger::Instance( ) << msg;
+        }
+    }
+
+    void Log::levelToColor( bool &__allow )
+    {
+        switch( msg.level )
+        {
+            case Level::Info:
+            {
+                if( Logger::Instance( ).getLevel( ) >= Level::Info )
+                {
+                    msg.color = Color::GREEN;
+                    __allow = true;
+                }
+                break;
+            }
+            case Level::Warning:
+            {
+                if( Logger::Instance( ).getLevel( ) >= Level::Warning )
+                {
+                    msg.color = Color::YELLOW;
+                    __allow = true;
+                }
+                break;
+            }
+            case Level::Error:
+            {
+                if( Logger::Instance( ).getLevel( ) >= Level::Error )
+                {
+                    msg.color = Color::RED;
+                    __allow = true;
+                }
+                break;
+            }
+            case Level::Debug1:
+            {
+                if( Logger::Instance( ).getLevel( ) >= Level::Debug1 )
+                {
+                    msg.color = Color::WHITE;
+                    __allow = true;
+                }
+                break;
+            }
+            case Level::Debug2:
+            {
+                if( Logger::Instance( ).getLevel( ) >= Level::Debug2 )
+                {
+                    msg.color = Color::BOLDWHITE;
+                    __allow = true;
+                }
+                break;
+            }
+        }
+    }
+
+    Log &Log::operator<<( const Precission &__precission )
+    {
+        msg.delimiter = __precission.delimiter;
+        return *this;
+    }
+
+    Log &Log::operator<<( Precission &__precission )
+    {
+        msg.delimiter = __precission.delimiter;
+        return *this;
+    }
+
+    Log &Log::operator<<(Level &__level)
+    {
+        msg.level = __level;
+        return *this;
+    }
+
+    Log &Log::operator<<(const Level &__level)
+    {
+        msg.level = __level;
+        return *this;
     }
 
 
 
 } }
-
-
-
-
-
-
-
