@@ -28,9 +28,10 @@ namespace ftcl
         size_type getMaxSize( ) const noexcept;
 
         void push( const type &elem );
+        void pushLock( const type &elem );
         void pop( );
-        type back( ) const;
-        type front( ) const;
+        type& back( ) const;
+        type& front( ) const;
     };
 
     template< class _T >
@@ -81,6 +82,17 @@ namespace ftcl
             throw ftcl::exception::Queue_overflow( __FILE__, __LINE__ );
     }
 
+    template<class _T>
+    void queue< _T >::pushLock( const queue::type &__elem )
+    {
+        while( distance == 0 )
+        {
+        }
+        mas_queue[ head ] = __elem;
+        ( head == maxSize - 1 ) ? head = 0 : head++;
+        distance--;
+    }
+
     template< class _T >
     void
     queue< _T >::pop( )
@@ -95,7 +107,7 @@ namespace ftcl
     }
 
     template< class _T >
-    _T
+    _T&
     queue< _T >::back( ) const
     {
         if( !empty( ) )
@@ -105,7 +117,7 @@ namespace ftcl
     }
 
     template< class _T >
-    _T
+    _T&
     queue< _T >::front( ) const
     {
         if( !empty( ) )

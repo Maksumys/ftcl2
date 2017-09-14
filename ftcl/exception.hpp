@@ -82,6 +82,45 @@ namespace ftcl
                             __lineEx
                         ) { }
         };
+
+        class Log_was_already_started : public Exception
+        {
+        public:
+            Log_was_already_started(
+                    std::string __fileEx,
+                    std::size_t __lineEx
+                ) : Exception(
+                        std::string{ "Log was already started!" },
+                        __fileEx,
+                        __lineEx
+                    ) { }
+        };
+
+        class Log_was_already_stopped : public Exception
+        {
+        public:
+            Log_was_already_stopped(
+                    std::string __fileEx,
+                    std::size_t __lineEx
+                ) : Exception(
+                        std::string{ "Log was already stopped!" },
+                        __fileEx,
+                        __lineEx
+                    ) { }
+        };
+
+        class Log_was_not_started : public Exception
+        {
+        public:
+            Log_was_not_started(
+                    std::string __fileEx,
+                    std::size_t __lineEx
+                ) : Exception(
+                        std::string{ "Log was not started!" },
+                        __fileEx,
+                        __lineEx
+                    ) { }
+        };
     }
 }
 

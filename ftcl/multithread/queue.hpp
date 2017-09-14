@@ -103,13 +103,13 @@ namespace ftcl { namespace multithread {
             return false;
         }
 
-        _T front( )
+        _T& front( )
         {
             std::lock_guard< mutex_type > lock( mutex_lock );
             return base_queue::front( );
         }
 
-        _T back( )
+        _T& back( )
         {
             std::lock_guard< mutex_type > lock( mutex_lock );
             return base_queue::back( );

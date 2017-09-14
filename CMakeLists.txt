@@ -3,7 +3,7 @@ project(ftcl CXX)
 set(PROJECT_VERSION "0.0.1")
 option(BUILD_DOC "Builds the doc subproject" ON)
 option(BUILD_LIB "Build the library subproject" ON)
-option(BUILD_TESTS "Build the tests subproject" ON)
+option(BUILD_TESTS "Build the tests subproject" OFF)
 
 if(BUILD_DOC)
     add_subdirectory(doc)

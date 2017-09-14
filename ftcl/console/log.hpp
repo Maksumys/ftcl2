@@ -5,6 +5,8 @@
 #include <fstream>
 #include <sstream>
 #include <thread>
+#include <vector>
+#include <list>
 
 #include "ftcl/queue.hpp"
 #include "ftcl/multithread/queue.hpp"
@@ -14,63 +16,6 @@
 #endif
 
 namespace ftcl { namespace console {
-
-    #ifdef FTCL_MPI_INCLUDED
-        #define RUNLOGGER                                               \
-            if( NetworkModule::Instance( ).master( ) )                  \
-            {                                                           \
-                thread = new std::thread( &Logger::runMaster, this );   \
-            }                                                           \
-            else                                                        \
-            {                                                           \
-                thread = new std::thread( &Logger::runWorker, this );   \
-            }
-    #else
-        #define RUNLOGGER                                               \
-            thread = new std::thread( &Logger::run, this );
-    #endif
-    #define WAITLOGGER                                                  \
-        thread -> join( );
-
-    #define FILE_OUTPUT                                                 \
-        if( fileEnabled )                                               \
-        {                                                               \
-            if( logMode == LogMode::singleThread )                      \
-                file << queueStream.back( );                            \
-            else                                                        \
-                file << multiQueueStream.back( );                       \
-        }
-
-    #define CONSOLE_OUTPUT                                              \
-        if( consoleEnabled )                                            \
-        {                                                               \
-            if( logMode == LogMode::singleThread )                      \
-                std::cout << queueStream.back( );                       \
-            else                                                        \
-                std::cout << multiQueueStream.back( );                  \
-        }
-
-
-    #define MESSAGE_POP                                                 \
-        if( logMode == LogMode::singleThread )                          \
-        {                                                               \
-            queueStream.pop( );                                         \
-        }                                                               \
-        else                                                            \
-            multiQueueStream.pop( );
-
-    #define MESSAGE_PUSH                                                \
-        if( __logger.logMode == LogMode::multiThread )                  \
-            __logger.multiQueueStream.push( str );                      \
-        else                                                            \
-        {                                                               \
-            __logger.queueStream.push( str );                           \
-        }
-
-    enum class LogMode
-    {
-        singleThread, multiThread
-    };
 
 #ifdef FTCL_MPI_INCLUDED
     enum class MpiMode
@@ -142,9 +87,6 @@ namespace ftcl { namespace console {
         void enableConsole( ) noexcept;
         void disableConsole( ) noexcept;
 
-        void enableMultiThreads( ) noexcept;
-        void disableMultiThreads( ) noexcept;
-
         void enableOutputTime( ) noexcept;
         void disableOutputTime( ) noexcept;
 
@@ -165,15 +107,12 @@ namespace ftcl { namespace console {
         bool timeEnabled{ true };
         bool fail{ false };
 
-        LogMode logMode{ LogMode::singleThread };
-
         std::ofstream file;
         std::string path{ "log.txt" };
 
-        queue< std::string > queueStream{ 100 };
         multithread::queue< std::string > multiQueueStream{ 100 };
 
-        std::thread *thread;
+        std::thread *thread = nullptr;
 
         Logger( );
         ~Logger( );
@@ -190,18 +129,15 @@ namespace ftcl { namespace console {
         bool runAllowMaster( );
         bool runAllowWorker( );
 
+        std::size_t exitMaster( );
 
         bool allLoggersClosed { false };        //< Признак, что все логгеры закрыты на узлах
         bool masterSendExit { false };          //< Мастер прислал сигнал завершения
+        bool workerReply { false };             //< Воркер отправил на мастера что закрывается
 
+        std::list< std::tuple< MPI_Request, bool > > vectorRequest;
 #endif
         void run( );
-
-
-
-
-
-
 
         /*!
          * \brief runAllow Проверка на выход из цикла вывода сообщений
@@ -268,5 +204,35 @@ namespace ftcl { namespace console {
     }
 
 } }
+
+
+#ifdef FTCL_MPI_INCLUDED
+    #define RUNLOGGER                                               \
+        if( NetworkModule::Instance( ).master( ) )                  \
+            thread = new std::thread( &Logger::runMaster, this );   \
+        else                                                        \
+            thread = new std::thread( &Logger::runWorker, this );
+#else
+    #define RUNLOGGER                                               \
+        thread = new std::thread( &Logger::run, this );
+#endif
+
+
+#define WAITLOGGER                                                  \
+    thread -> join( );
+
+#define FILE_OUTPUT                                                 \
+    if( fileEnabled )                                               \
+        file << multiQueueStream.back( );
+
+#define CONSOLE_OUTPUT                                              \
+    if( consoleEnabled )                                            \
+        std::cout << multiQueueStream.back( );
+
+#define MESSAGE_POP                                                 \
+        multiQueueStream.pop( );
+
+#define MESSAGE_PUSH                                                \
+        __logger.multiQueueStream.push( str );
 
 #endif //_FTCL_CONSOLE_LOG_HPP_INCLUDED

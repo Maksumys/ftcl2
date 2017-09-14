@@ -8,7 +8,7 @@ set(HEADERS
     sheduler/sheduler.hpp
 )
 
-find_package(Mpi)
+find_package(MPI)
 
 set(FTCL_COMPILE_OPTIONS
         -std=c++11

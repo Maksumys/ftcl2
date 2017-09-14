@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <string>
 #include <list>
+#include <iterator>
 
 namespace ftcl { namespace console {
 
@@ -21,13 +22,14 @@ namespace ftcl { namespace console {
         exit = true;
         WAITLOGGER
         #ifdef FTCL_MPI_INCLUDED
-        if( fail )
-        {
-            std::cout << "FAIL LOG EXIT" << std::endl;
-            MPI_Abort( MPI_COMM_WORLD, 0 );
-        }
+            if( fail )
+            {
+                std::cout << "FAIL LOG EXIT" << std::endl;
+                MPI_Abort( MPI_COMM_WORLD, 0 );
+            }
         #endif
     }
+
 
 
 #ifdef FTCL_MPI_INCLUDED
@@ -36,6 +38,10 @@ namespace ftcl { namespace console {
         if( !NetworkModule::Instance( ).master( ) )
             throw exception::Illegal_rank( __FILE__, __LINE__ );
 
+        std::size_t sendCountExit = 0;
+        bool willExited = false;
+        std::chrono::steady_clock::time_point start;
+        std::size_t countRecv = 0;
         while( runAllowMaster( ) )
         {
             if( !empty( ) )
@@ -43,78 +49,52 @@ namespace ftcl { namespace console {
                 FILE_OUTPUT
                 CONSOLE_OUTPUT
                 MESSAGE_POP
-
-                auto check = NetworkModule::Instance( ).checkMessage( -1, TypeMessage::MessageLog );
-                if( std::get< 0 >( check ) )
-                {
-                    auto msg = NetworkModule::Instance( ).getMessage( std::get< 1 >( check ) );
-                    std::copy( msg.begin( ), msg.end( ), std::ostream_iterator< char >( std::cout, "" ) );
-                }
             }
+            else
+                std::this_thread::sleep_for( std::chrono::microseconds( 1 ) );
 
-            if( exit )
+            auto check = NetworkModule::Instance( ).checkMessage( -1, TypeMessage::MessageLog );
+            if( std::get< 0 >( check ) )
             {
-                std::list< MPI_Request > vectorRequest;
-                for( int i = 0; i < NetworkModule::Instance( ).getSize( ) - 1; i++ )
-                {
-                    vectorRequest.push_back( NetworkModule::Instance( ).send( " ", i, TypeMessage::MessageLogExit ) );
-                }
-
-                std::size_t count = 0;
-                auto start = std::chrono::steady_clock::now( );
-                while( count < vectorRequest.size( ) )
-                {
-                    MPI_Status status;
-                    int flag;
-                    std::list< MPI_Request >::iterator it;
-                    while( it != vectorRequest.end( ) )
-                    {
-                        MPI_Test( &*it, &flag, &status );
-                        if( flag )
-                        {
-                            count++;
-                            it = vectorRequest.erase( it );
-                        }
-                    }
-                    std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
-
-                    auto end = std::chrono::steady_clock::now( );
-                    if( std::chrono::duration_cast< std::chrono::seconds >( end - start ).count( ) > 5 )
-                    {
-                        for( auto &elem : vectorRequest )
-                            MPI_Cancel( &elem );
-
-                        fail = true;
-                        break;
-                    }
-                }
-
-                std::size_t countRecv = 0;
-                start = std::chrono::steady_clock::now( );
-
-                while( countRecv < count )
-                {
-                    auto check = NetworkModule::Instance( ).checkMessage( -1, TypeMessage::MessageLogExit );
-                    if( std::get< 0 >( check ) )
-                    {
-                        NetworkModule::Instance( ).getMessage( std::get< 1 >( check ) );
-                        countRecv++;
-                    }
-                    std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
-                    auto end = std::chrono::steady_clock::now( );
-                    if( std::chrono::duration_cast< std::chrono::seconds >( end - start ).count( ) > 5 )
-                    {
-                        fail = true;
-                        allLoggersClosed = true;
-                    }
-                }
-                allLoggersClosed = true;
+                auto msg = NetworkModule::Instance( ).getMessage( std::get< 1 >( check ) );
+                std::copy( msg.begin( ), msg.end( ), std::ostream_iterator< char >( std::cout, "" ) );
             }
-            std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+
+            if( ( exit ) && ( !willExited ) && ( empty( ) ) )
+            {
+                sendCountExit = exitMaster( );
+                willExited = true;
+                start = std::chrono::steady_clock::now( );
+            }
+
+            if( willExited )
+            {
+                auto check1 = NetworkModule::Instance( ).checkMessage( -1, TypeMessage::MessageLogExit );
+                auto check2 = NetworkModule::Instance( ).checkMessage( -1, TypeMessage::MessageLog );
+
+                if( ( std::get< 0 >( check1 ) ) && ( !std::get< 0 >( check2 ) ) )
+                {
+                    NetworkModule::Instance( ).getMessage( std::get< 1 >( check1 ) );
+                    countRecv++;
+                }
+
+                std::this_thread::sleep_for( std::chrono::microseconds( 10 ) );
+                auto end = std::chrono::steady_clock::now( );
+                if( std::chrono::duration_cast< std::chrono::seconds >( end - start ).count( ) > 5 )
+                {
+                    fail = true;
+                    allLoggersClosed = true;
+                }
+                if( countRecv == sendCountExit )
+                    allLoggersClosed = true;
+            }
         }
     }
 
-    void Logger::runWorker()
+
+
+
+    void Logger::runWorker( )
     {
         if( NetworkModule::Instance( ).master( ) )
             throw exception::Illegal_rank( __FILE__, __LINE__ );
@@ -125,35 +105,65 @@ namespace ftcl { namespace console {
                 if( !empty( ) )
                 {
                     MPI_Request request;
-                    if( logMode == LogMode::singleThread )
-                        request = NetworkModule::Instance( ).send(
-                                queueStream.back( ), 0, TypeMessage::MessageLog
-                            );
-                    else
-                        request = NetworkModule::Instance( ).send(
-                                multiQueueStream.back( ), 0, TypeMessage::MessageLog
-                            );
+                    request = NetworkModule::Instance( ).send(
+                            multiQueueStream.back( ), 0, TypeMessage::MessageLog
+                        );
 
                     MPI_Status status;
+                    int flag = 0;
+                    auto start = std::chrono::steady_clock::now( );
+                    while( true )
+                    {
+                        MPI_Test( &request, &flag, &status );
+                        if( flag == 1 )
+                            break;
+
+                        std::this_thread::sleep_for( std::chrono::microseconds( 10 ) );
+                        auto end = std::chrono::steady_clock::now( );
+                        if( std::chrono::duration_cast< std::chrono::seconds >( end - start ).count( ) > 5 )
+                        {
+                            std::this_thread::sleep_for( std::chrono::microseconds( 10 ) );
+                            MPI_Cancel( &request );
+                            throw exception::Error_worker_logger( __FILE__, __LINE__ );
+                        }
+                    }
+                    MESSAGE_POP
+                }
+                else if( ( masterSendExit ) && ( exit ) )
+                {
+                    MPI_Status status;
+                    std::string str = " ";
+                    MPI_Request request = NetworkModule::Instance( ).send(
+                           str, 0, TypeMessage::MessageLogExit
+                        );
                     int flag;
                     auto start = std::chrono::steady_clock::now( );
                     while( true )
                     {
                         MPI_Test( &request, &flag, &status );
                         if( flag == 1 )
-                        {
                             break;
-                        }
-                        std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+
+                        std::this_thread::sleep_for( std::chrono::microseconds( 10 ) );
                         auto end = std::chrono::steady_clock::now( );
                         if( std::chrono::duration_cast< std::chrono::seconds >( end - start ).count( ) > 5 )
                         {
-                            std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
+                            std::this_thread::sleep_for( std::chrono::microseconds( 10 ) );
                             MPI_Cancel( &request );
                             throw exception::Error_worker_logger( __FILE__, __LINE__ );
                         }
                     }
-                    MESSAGE_POP
+                    workerReply = true;
+                }
+
+                if( !masterSendExit )
+                {
+                    auto checkExit = NetworkModule::Instance( ).checkMessage( -1, TypeMessage::MessageLogExit );
+                    if( std::get< 0 >( checkExit ) )
+                    {
+                        NetworkModule::Instance( ).getMessage( std::get< 1 >( checkExit ) );
+                        masterSendExit = true;
+                    }
                 }
             }
         }
@@ -165,12 +175,56 @@ namespace ftcl { namespace console {
 
     bool Logger::runAllowMaster( )
     {
-        return runAllow( ) && !allLoggersClosed;
+        return runAllow( ) || !allLoggersClosed || !empty( );
     }
 
     bool Logger::runAllowWorker( )
     {
-        return runAllow( ) && !masterSendExit;
+        return runAllow( ) || !workerReply;
+    }
+
+    std::size_t Logger::exitMaster( )
+    {
+        std::string str = " ";
+        for( int i = 0; i < NetworkModule::Instance( ).getSize( ) - 1; i++ )
+        {
+            vectorRequest.push_back( std::make_tuple( NetworkModule::Instance( ).send( str, i + 1, TypeMessage::MessageLogExit ), false ) );
+        }
+
+        std::size_t count = 0;
+        auto start = std::chrono::steady_clock::now( );
+        while( count < vectorRequest.size( ) )
+        {
+            MPI_Status status;
+            int flag;
+            for( auto &elem : vectorRequest )
+            {
+                if( !std::get< 1 >( elem ) )
+                {
+                        MPI_Test( &std::get< 0 >( elem ), &flag, &status );
+                        if( flag )
+                        {
+                            count++;
+                            std::get< 1 >( elem ) = true;
+                        }
+                }
+            }
+
+            std::this_thread::sleep_for( std::chrono::microseconds( 10 ) );
+
+            auto end = std::chrono::steady_clock::now( );
+            if( std::chrono::duration_cast< std::chrono::seconds >( end - start ).count( ) > 5 )
+            {
+                for( auto &elem : vectorRequest )
+                {
+                    if( !std::get< 1 >( elem ) )
+                        MPI_Cancel( &std::get< 0 >( elem ) );
+                }
+                fail = true;
+                break;
+            }
+        }
+        return count;
     }
 
 #endif
@@ -184,10 +238,8 @@ namespace ftcl { namespace console {
     bool
     Logger::empty( )
     {
-        if( logMode == LogMode::singleThread )
-            return queueStream.empty( );
-        else
-            return multiQueueStream.empty( );
+
+        return multiQueueStream.empty( );
     }
 
     void
@@ -234,34 +286,6 @@ namespace ftcl { namespace console {
     Logger::disableConsole( ) noexcept
     {
         consoleEnabled = false;
-    }
-
-    void
-    Logger::enableMultiThreads( ) noexcept
-    {
-        if( logMode == LogMode::singleThread )
-        {
-            exit = true;
-            thread->join( );
-            delete thread;
-            logMode = LogMode::singleThread;
-            exit = false;
-            thread = new std::thread( &Logger::run, this );
-        }
-    }
-
-    void
-    Logger::disableMultiThreads( ) noexcept
-    {
-        if( logMode == LogMode::multiThread )
-        {
-            exit = true;
-            thread->join( );
-            delete thread;
-            logMode = LogMode::singleThread;
-            exit = false;
-            thread = new std::thread( &Logger::run, this );
-        }
     }
 
     void
@@ -317,6 +341,9 @@ namespace ftcl { namespace console {
     Logger&
     operator<<( Logger &__logger, const LogMessage &__message )
     {
+        if( __logger.thread == nullptr )
+            throw  exception::Log_was_not_started( __FILE__, __LINE__ );
+
         std::string str = __message.time;
 #ifdef FTCL_MPI_INCLUDED
         str += " << Node " + std::to_string( __message.numNode ) + " >> ";
@@ -433,7 +460,5 @@ namespace ftcl { namespace console {
         msg.level = __level;
         return *this;
     }
-
-
 
 } }
