@@ -14,19 +14,28 @@ namespace ftcl { namespace console {
     Logger::Logger( )
     {
         file.open( path, std::ios::app );
-        RUNLOGGER
+        #ifdef FTCL_MPI_INCLUDED
+                if( NetworkModule::Instance( ).master( ) )
+                    thread = new std::thread( &Logger::runMaster, this );
+                else
+                    thread = new std::thread( &Logger::runWorker, this );
+        #else
+                thread = new std::thread( &Logger::run, this );
+        #endif
     }
 
     Logger::~Logger( )
     {
         exit = true;
-        WAITLOGGER
+        thread -> join( );
         #ifdef FTCL_MPI_INCLUDED
+        {
             if( fail )
             {
                 std::cout << "FAIL LOG EXIT" << std::endl;
-                MPI_Abort( MPI_COMM_WORLD, 0 );
+                NetworkModule::Instance( ).abort( );
             }
+        }
         #endif
     }
 
@@ -46,9 +55,11 @@ namespace ftcl { namespace console {
         {
             if( !empty( ) )
             {
-                FILE_OUTPUT
-                CONSOLE_OUTPUT
-                MESSAGE_POP
+                if( fileEnabled )                                               \
+                    file << multiQueueStream.back( );
+                if( consoleEnabled )                                            \
+                    std::cout << multiQueueStream.back( );
+                multiQueueStream.pop( );
             }
             else
                 std::this_thread::sleep_for( std::chrono::microseconds( 1 ) );
@@ -104,18 +115,15 @@ namespace ftcl { namespace console {
             {
                 if( !empty( ) )
                 {
-                    MPI_Request request;
-                    request = NetworkModule::Instance( ).send(
+                    NetworkModule::Request request = NetworkModule::Instance( ).send(
                             multiQueueStream.back( ), 0, TypeMessage::MessageLog
                         );
 
-                    MPI_Status status;
-                    int flag = 0;
+                    NetworkModule::Status status;
                     auto start = std::chrono::steady_clock::now( );
                     while( true )
                     {
-                        MPI_Test( &request, &flag, &status );
-                        if( flag == 1 )
+                        if( NetworkModule::Instance( ).test( request, status ) )
                             break;
 
                         std::this_thread::sleep_for( std::chrono::microseconds( 10 ) );
@@ -123,25 +131,24 @@ namespace ftcl { namespace console {
                         if( std::chrono::duration_cast< std::chrono::seconds >( end - start ).count( ) > 5 )
                         {
                             std::this_thread::sleep_for( std::chrono::microseconds( 10 ) );
-                            MPI_Cancel( &request );
+                            NetworkModule::Instance( ).cancel( request );
                             throw exception::Error_worker_logger( __FILE__, __LINE__ );
                         }
                     }
-                    MESSAGE_POP
+                    multiQueueStream.pop( );
                 }
                 else if( ( masterSendExit ) && ( exit ) )
                 {
-                    MPI_Status status;
+                    NetworkModule::Status status;
                     std::string str = " ";
-                    MPI_Request request = NetworkModule::Instance( ).send(
+                    NetworkModule::Request request = NetworkModule::Instance( ).send(
                            str, 0, TypeMessage::MessageLogExit
                         );
-                    int flag;
+
                     auto start = std::chrono::steady_clock::now( );
                     while( true )
                     {
-                        MPI_Test( &request, &flag, &status );
-                        if( flag == 1 )
+                        if( NetworkModule::Instance( ).test( request, status ) )
                             break;
 
                         std::this_thread::sleep_for( std::chrono::microseconds( 10 ) );
@@ -149,7 +156,7 @@ namespace ftcl { namespace console {
                         if( std::chrono::duration_cast< std::chrono::seconds >( end - start ).count( ) > 5 )
                         {
                             std::this_thread::sleep_for( std::chrono::microseconds( 10 ) );
-                            MPI_Cancel( &request );
+                            NetworkModule::Instance( ).cancel( request );
                             throw exception::Error_worker_logger( __FILE__, __LINE__ );
                         }
                     }
@@ -195,14 +202,12 @@ namespace ftcl { namespace console {
         auto start = std::chrono::steady_clock::now( );
         while( count < vectorRequest.size( ) )
         {
-            MPI_Status status;
-            int flag;
+            NetworkModule::Status status;
             for( auto &elem : vectorRequest )
             {
                 if( !std::get< 1 >( elem ) )
                 {
-                        MPI_Test( &std::get< 0 >( elem ), &flag, &status );
-                        if( flag )
+                        if( NetworkModule::Instance().test( std::get< 0 >( elem ), status ) )
                         {
                             count++;
                             std::get< 1 >( elem ) = true;
@@ -249,9 +254,11 @@ namespace ftcl { namespace console {
         {
             if( !empty( ) )
             {
-                FILE_OUTPUT
-                CONSOLE_OUTPUT
-                MESSAGE_POP
+                if( fileEnabled )                                               \
+                    file << multiQueueStream.back( );
+                if( consoleEnabled )                                            \
+                    std::cout << multiQueueStream.back( );
+                multiQueueStream.pop( );
             }
             std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
         }
@@ -352,7 +359,7 @@ namespace ftcl { namespace console {
                 __message.stream.data( ) +
                 Color::RESET;
 
-        MESSAGE_PUSH
+        __logger.multiQueueStream.push( str );
 
         return __logger;
     }

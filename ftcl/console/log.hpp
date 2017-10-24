@@ -8,6 +8,15 @@
 #include <vector>
 #include <list>
 
+
+
+//#if  __cplusplus >= 201406
+//
+//#include <string_view>
+//
+//#endif
+
+
 #include "ftcl/queue.hpp"
 #include "ftcl/multithread/queue.hpp"
 
@@ -26,6 +35,25 @@ namespace ftcl { namespace console {
 
     namespace Color
     {
+        //#if __cplusplus >= 201406
+        //constexpr std::string_view RESET = "\033[0m";
+        //constexpr std::string_view BLACK = "\033[30m";              /// Black
+        //constexpr std::string_view RED = "\033[31m";                /// Red
+        //constexpr std::string_view GREEN = "\033[32m";              /// Green
+        //constexpr std::string_view YELLOW = "\033[33m";             /// Yellow
+        //constexpr std::string_view BLUE = "\033[34m";               /// Blue
+        //constexpr std::string_view MAGENTA = "\033[35m";            /// Magenta
+        //constexpr std::string_view CYAN = "\033[36m";               /// Cyan
+        //constexpr std::string_view WHITE = "\033[37m";              /// White
+        //constexpr std::string_view BOLDBLACK = "\033[1m\033[30m";   /// Bold Black
+        //constexpr std::string_view BOLDRED = "\033[1m\033[31m";     /// Bold Red
+        //constexpr std::string_view BOLDGREEN = "\033[1m\033[32m";   /// Bold Green
+        //constexpr std::string_view BOLDYELLOW = "\033[1m\033[33m";  /// Bold Yellow
+        //constexpr std::string_view BOLDBLUE = "\033[1m\033[34m";    /// Bold Blue
+        //constexpr std::string_view BOLDMAGENTA = "\033[1m\033[35m"; /// Bold Magenta
+        //constexpr std::string_view BOLDCYAN = "\033[1m\033[36m";    /// Bold Cyan
+        //constexpr std::string_view BOLDWHITE = "\033[1m\033[37m";   /// Bold White
+        //#else
         constexpr auto RESET = "\033[0m";
         constexpr auto BLACK = "\033[30m";              /// Black
         constexpr auto RED = "\033[31m";                /// Red
@@ -43,6 +71,7 @@ namespace ftcl { namespace console {
         constexpr auto BOLDMAGENTA = "\033[1m\033[35m"; /// Bold Magenta
         constexpr auto BOLDCYAN = "\033[1m\033[36m";    /// Bold Cyan
         constexpr auto BOLDWHITE = "\033[1m\033[37m";   /// Bold White
+        //#endif
     }
 
     enum class Level
@@ -121,12 +150,24 @@ namespace ftcl { namespace console {
 
 #ifdef FTCL_MPI_INCLUDED
         /*!
-         * \brief run Запуск логгера (MPI)
+         * \brief run Запуск логгера на мастере (MPI)
          */
         void runMaster( );
+        /*!
+         * \brief run Запуск логгера на воркере (MPI)
+         */
         void runWorker( );
 
+        /*!
+         * \brief runAllowMaster условие продолжения работы на мастере
+         * \return true, если нужно продолжить работу
+         */
         bool runAllowMaster( );
+
+        /*!
+         * \brief runAllowWorker условие продолжения работы на воркере
+         * \return true, если нужно продолжить работу
+         */
         bool runAllowWorker( );
 
         std::size_t exitMaster( );
@@ -137,6 +178,9 @@ namespace ftcl { namespace console {
 
         std::list< std::tuple< MPI_Request, bool > > vectorRequest;
 #endif
+        /*!
+         * \brief run Запуск логгера (обычный режим)
+         */
         void run( );
 
         /*!
@@ -205,34 +249,5 @@ namespace ftcl { namespace console {
 
 } }
 
-
-#ifdef FTCL_MPI_INCLUDED
-    #define RUNLOGGER                                               \
-        if( NetworkModule::Instance( ).master( ) )                  \
-            thread = new std::thread( &Logger::runMaster, this );   \
-        else                                                        \
-            thread = new std::thread( &Logger::runWorker, this );
-#else
-    #define RUNLOGGER                                               \
-        thread = new std::thread( &Logger::run, this );
-#endif
-
-
-#define WAITLOGGER                                                  \
-    thread -> join( );
-
-#define FILE_OUTPUT                                                 \
-    if( fileEnabled )                                               \
-        file << multiQueueStream.back( );
-
-#define CONSOLE_OUTPUT                                              \
-    if( consoleEnabled )                                            \
-        std::cout << multiQueueStream.back( );
-
-#define MESSAGE_POP                                                 \
-        multiQueueStream.pop( );
-
-#define MESSAGE_PUSH                                                \
-        __logger.multiQueueStream.push( str );
 
 #endif //_FTCL_CONSOLE_LOG_HPP_INCLUDED

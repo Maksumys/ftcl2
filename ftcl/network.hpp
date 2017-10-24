@@ -28,7 +28,8 @@ namespace ftcl
     {
     public:
         using Number = int;
-
+        using Request = MPI_Request;
+        using Status = MPI_Status;
     private:
         Number rank;
         Number size;
@@ -64,6 +65,10 @@ namespace ftcl
         getMessage(
                 const MPI_Status &status
             );
+
+        bool test( NetworkModule::Request &request, NetworkModule::Status &status );
+        void cancel( NetworkModule::Request &request );
+        void abort( );
     private:
         ~NetworkModule( );
     };

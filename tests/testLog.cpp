@@ -7,7 +7,6 @@ TEST( Log, output )
 {
     {
         Logger::Instance( ).disableOutputTime( );
-        Logger::Instance( ).disableMultiThreads( );
         std::stringstream buffer;
         std::streambuf *sbuf = std::cout.rdbuf();
         std::cout.rdbuf(buffer.rdbuf());
@@ -18,7 +17,6 @@ TEST( Log, output )
     }
 
     {
-        Logger::Instance( ).enableMultiThreads( );
         std::stringstream buffer;
         std::streambuf *sbuf = std::cout.rdbuf();
         std::cout.rdbuf(buffer.rdbuf());

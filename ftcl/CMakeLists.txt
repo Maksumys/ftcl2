@@ -8,10 +8,10 @@ set(HEADERS
     sheduler/sheduler.hpp
 )
 
-find_package(MPI)
 
 set(FTCL_COMPILE_OPTIONS
-        -std=c++11
+        -std=c++1z
+        -Wall
     )
 
 set(FTCL_LIBRARIES
@@ -20,13 +20,18 @@ set(FTCL_LIBRARIES
 set(FTCL_DEFINITION
    )
 
-if(MPI_CXX_FOUND)
-    list(APPEND FTCL_DEFINITION -DFTCL_MPI_INCLUDED)
-    list(APPEND FTCL_LIBRARIES ${MPI_CXX_LIBRARIES})
-    list(APPEND HEADERS
-            network.cpp
-            network.hpp
-        )
+if(WITH_MPI)
+
+    find_package(MPI)
+    if(MPI_CXX_FOUND)
+        list(APPEND FTCL_DEFINITION -DFTCL_MPI_INCLUDED)
+        list(APPEND FTCL_LIBRARIES ${MPI_CXX_LIBRARIES})
+        list(APPEND HEADERS
+                network.cpp
+                network.hpp
+            )
+    endif()
+
 endif()
 
 add_library(${PROJECT_NAME} SHARED ${HEADERS})

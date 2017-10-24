@@ -83,6 +83,23 @@ namespace ftcl
         return buf;
     }
 
+    bool NetworkModule::test( NetworkModule::Request &request, NetworkModule::Status &status )
+    {
+        int testVar;
+        MPI_Test( &request, &testVar, &status );
+        return testVar != 0;
+    }
+
+    void NetworkModule::cancel(NetworkModule::Request &request)
+    {
+        MPI_Cancel( &request );
+    }
+
+    void NetworkModule::abort()
+    {
+        MPI_Abort( MPI_COMM_WORLD, 0 );
+    }
+
     std::tuple< bool, MPI_Status >
     NetworkModule::checkMessage( int source, TypeMessage typeMessage )
     {
