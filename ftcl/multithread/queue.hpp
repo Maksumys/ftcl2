@@ -5,8 +5,8 @@
 #include <mutex>
 #include <condition_variable>
 
-namespace ftcl { namespace multithread {
-
+namespace ftcl::multithread
+{
     //потокобезопасная очередь с одним мьютексом
     template<class _T >
     class queue : public ftcl::queue< _T >
@@ -57,14 +57,14 @@ namespace ftcl { namespace multithread {
 
         bool try_push( const _T &__elem )
         {
-            if( mutex_lock.try_lock( ) )
-                if( base_queue::distance > 0 )
-                {
-                    base_queue::push( __elem );
+            if( mutex_lock.try_lock( ) ) {
+                if (base_queue::distance > 0) {
+                    base_queue::push(__elem);
                     mutex_lock.unlock();
                     return true;
                 }
                 mutex_lock.unlock();
+            }
             return false;
         }
 
@@ -72,18 +72,18 @@ namespace ftcl { namespace multithread {
         {
             std::unique_lock< mutex_type > head_lock( mutex_lock );
             condition_tail.wait( head_lock,
-            [ & ]
-            {
-                if( !isClearAction )
+                [ & ]
                 {
-                    if( base_queue::distance != base_queue::maxSize )
+                    if( !isClearAction )
+                    {
+                        if( base_queue::distance != base_queue::maxSize )
+                            return true;
+                        condition_head.notify_one( );
+                        return false;
+                    }
+                    else
                         return true;
-                    condition_head.notify_one( );
-                    return false;
-                }
-                else
-                    return true;
-            } );
+                } );
             if( !isClearAction )
             {
                 base_queue::pop( );
@@ -123,6 +123,6 @@ namespace ftcl { namespace multithread {
     };
 
 
-} }
+}
 
 #endif //_FTCL_MULTITHREAD_QUEUE_HPP_INCLUDED

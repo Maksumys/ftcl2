@@ -9,202 +9,16 @@
 #include <list>
 
 
-
-//#if  __cplusplus >= 201406
-//
-//#include <string_view>
-//
-//#endif
-
-
 #include "ftcl/queue.hpp"
 #include "ftcl/multithread/queue.hpp"
+#include "ftcl/console/logExtensions.hpp"
 
-#ifdef FTCL_MPI_INCLUDED
-    #include <mpi.h>
-#endif
-
-namespace ftcl { namespace console {
-
-#ifdef FTCL_MPI_INCLUDED
-    enum class MpiMode
-    {
-        mpiMaster, mpiWorker
-    };
-#endif
-
-    namespace Color
-    {
-        //#if __cplusplus >= 201406
-        //constexpr std::string_view RESET = "\033[0m";
-        //constexpr std::string_view BLACK = "\033[30m";              /// Black
-        //constexpr std::string_view RED = "\033[31m";                /// Red
-        //constexpr std::string_view GREEN = "\033[32m";              /// Green
-        //constexpr std::string_view YELLOW = "\033[33m";             /// Yellow
-        //constexpr std::string_view BLUE = "\033[34m";               /// Blue
-        //constexpr std::string_view MAGENTA = "\033[35m";            /// Magenta
-        //constexpr std::string_view CYAN = "\033[36m";               /// Cyan
-        //constexpr std::string_view WHITE = "\033[37m";              /// White
-        //constexpr std::string_view BOLDBLACK = "\033[1m\033[30m";   /// Bold Black
-        //constexpr std::string_view BOLDRED = "\033[1m\033[31m";     /// Bold Red
-        //constexpr std::string_view BOLDGREEN = "\033[1m\033[32m";   /// Bold Green
-        //constexpr std::string_view BOLDYELLOW = "\033[1m\033[33m";  /// Bold Yellow
-        //constexpr std::string_view BOLDBLUE = "\033[1m\033[34m";    /// Bold Blue
-        //constexpr std::string_view BOLDMAGENTA = "\033[1m\033[35m"; /// Bold Magenta
-        //constexpr std::string_view BOLDCYAN = "\033[1m\033[36m";    /// Bold Cyan
-        //constexpr std::string_view BOLDWHITE = "\033[1m\033[37m";   /// Bold White
-        //#else
-        constexpr auto RESET = "\033[0m";
-        constexpr auto BLACK = "\033[30m";              /// Black
-        constexpr auto RED = "\033[31m";                /// Red
-        constexpr auto GREEN = "\033[32m";              /// Green
-        constexpr auto YELLOW = "\033[33m";             /// Yellow
-        constexpr auto BLUE = "\033[34m";               /// Blue
-        constexpr auto MAGENTA = "\033[35m";            /// Magenta
-        constexpr auto CYAN = "\033[36m";               /// Cyan
-        constexpr auto WHITE = "\033[37m";              /// White
-        constexpr auto BOLDBLACK = "\033[1m\033[30m";   /// Bold Black
-        constexpr auto BOLDRED = "\033[1m\033[31m";     /// Bold Red
-        constexpr auto BOLDGREEN = "\033[1m\033[32m";   /// Bold Green
-        constexpr auto BOLDYELLOW = "\033[1m\033[33m";  /// Bold Yellow
-        constexpr auto BOLDBLUE = "\033[1m\033[34m";    /// Bold Blue
-        constexpr auto BOLDMAGENTA = "\033[1m\033[35m"; /// Bold Magenta
-        constexpr auto BOLDCYAN = "\033[1m\033[36m";    /// Bold Cyan
-        constexpr auto BOLDWHITE = "\033[1m\033[37m";   /// Bold White
-        //#endif
-    }
-
-    enum class Level
-    {
-        Error, Info, Warning, Debug1, Debug2
-    };
-
-    class Precission
-    {
-    public:
-        Precission( const std::string &__delimiter ) : delimiter( __delimiter ) { }
-        std::string delimiter { "" };
-    };
-
-    class LogMessage
-    {
-    public:
-        Level level{ Level::Info };
-        std::string time;
-        std::string color;
-        std::string stream;
-        std::string delimiter;
-
-#ifdef FTCL_MPI_INCLUDED
-        std::size_t numNode;
-#endif
-
-    };
-
-    class Logger
-    {
-    public:
-        static Logger& Instance( );
-        Logger( const Logger& ) = delete;
-        Logger( Logger&& ) = delete;
-        Logger& operator=( const Logger& ) = delete;
-        Logger& operator=( Logger&& ) = delete;
-
-        void enableFile( ) noexcept;
-        void disableFile( ) noexcept;
-
-        void enableConsole( ) noexcept;
-        void disableConsole( ) noexcept;
-
-        void enableOutputTime( ) noexcept;
-        void disableOutputTime( ) noexcept;
-
-        void setPath( const std::string &__path );
-
-        Level getLevel(  );
-        void setLevel( const Level &__level );
-
-        std::string getCurrentTime( ) const noexcept;
-
-    protected:
-
-        /// settings
-        Level globalLevel{ Level::Info };
-        bool fileEnabled{ true };
-        bool consoleEnabled{ true };
-        bool exit{ false };
-        bool timeEnabled{ true };
-        bool fail{ false };
-
-        std::ofstream file;
-        std::string path{ "log.txt" };
-
-        multithread::queue< std::string > multiQueueStream{ 100 };
-
-        std::thread *thread = nullptr;
-
-        Logger( );
-        ~Logger( );
-
-
-
-#ifdef FTCL_MPI_INCLUDED
-        /*!
-         * \brief run Запуск логгера на мастере (MPI)
-         */
-        void runMaster( );
-        /*!
-         * \brief run Запуск логгера на воркере (MPI)
-         */
-        void runWorker( );
-
-        /*!
-         * \brief runAllowMaster условие продолжения работы на мастере
-         * \return true, если нужно продолжить работу
-         */
-        bool runAllowMaster( );
-
-        /*!
-         * \brief runAllowWorker условие продолжения работы на воркере
-         * \return true, если нужно продолжить работу
-         */
-        bool runAllowWorker( );
-
-        std::size_t exitMaster( );
-
-        bool allLoggersClosed { false };        //< Признак, что все логгеры закрыты на узлах
-        bool masterSendExit { false };          //< Мастер прислал сигнал завершения
-        bool workerReply { false };             //< Воркер отправил на мастера что закрывается
-
-        std::list< std::tuple< MPI_Request, bool > > vectorRequest;
-#endif
-        /*!
-         * \brief run Запуск логгера (обычный режим)
-         */
-        void run( );
-
-        /*!
-         * \brief runAllow Проверка на выход из цикла вывода сообщений
-         * \return true если сообщения позволено выводить
-         */
-        bool runAllow( );
-
-        /*!
-         * \brief empty Проверка очередей на элементы
-         * \return
-         */
-        bool empty( );
-
-        friend Logger& operator<<( Logger &__logger, const LogMessage &__msg );
-    };
-
-    Logger& operator<<( Logger &__logger, const std::string &__str );
-    Logger& operator<<( Logger &__logger, const char* __str );
-
+namespace ftcl::console
+{
     class Log
     {
     protected:
-        LogMessage msg;
+        ftcl::console::extensions::LogMessage msg;
     public:
         ~Log( );
         Log& operator<<( int __value );
@@ -217,10 +31,10 @@ namespace ftcl { namespace console {
         Log& operator<<( double __value );
         Log& operator<<( const std::string &__value );
 
-        Log& operator<<( const Level &__level );
-        Log& operator<<( Level &__level );
-        Log &operator<<( const Precission &precission );
-        Log &operator<<( Precission &precission );
+        Log& operator<<( const extensions::Level &__level );
+        Log& operator<<( extensions::Level &__level );
+        Log &operator<<( const extensions::Precission &precission );
+        Log &operator<<( extensions::Precission &precission );
 
         template< class T >
         Log& operator<<( const std::vector< T > &value );
@@ -229,6 +43,20 @@ namespace ftcl { namespace console {
         Log& operator<<( const std::array< T, size > &array );
 
         void levelToColor( bool &__allow );
+
+        void enableFile( ) noexcept;
+        void disableFile( ) noexcept;
+
+        void enableConsole( ) noexcept;
+        void disableConsole( ) noexcept;
+
+        void enableOutputTime( ) noexcept;
+        void disableOutputTime( ) noexcept;
+
+        void setPath( const std::string &__path );
+
+        extensions::Level getLevel(  );
+        void setLevel( const extensions::Level &__level );
     };
 
     template< class T >
@@ -246,8 +74,7 @@ namespace ftcl { namespace console {
             msg.stream += std::to_string( elem ) + msg.delimiter;
         return *this;
     }
-
-} }
+}
 
 
 #endif //_FTCL_CONSOLE_LOG_HPP_INCLUDED

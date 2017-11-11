@@ -1,8 +1,8 @@
+#ifdef FTCL_MPI_INCLUDED
+
 #include "ftcl/network.hpp"
 #include "ftcl/console/log.hpp"
 #include <vector>
-
-#ifdef FTCL_MPI_INCLUDED
 
 namespace ftcl
 {
@@ -48,7 +48,7 @@ namespace ftcl
 
         MPI_Request request;
         MPI_Isend(
-                __data.data( ),
+                (void*)__data.data( ),
                 static_cast< int >( __data.size( ) ),
                 MPI_CHAR,
                 static_cast< int >( __toRank ),
@@ -59,7 +59,10 @@ namespace ftcl
         return request;
     }
 
-    std::vector< char > NetworkModule::getMessage( const MPI_Status &status )
+    std::vector< char >
+    NetworkModule::getMessage(
+            MPI_Status &status
+        )
     {
         int count;
         MPI_Get_count( &status, MPI_CHAR, &count );

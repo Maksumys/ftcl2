@@ -1,45 +1,61 @@
-set(HEADERS
-    console/log.cpp
-    queue.hpp
-    exception.hpp
-    console/log.hpp
-    ftcl.hpp
-    multithread/queue.hpp
-    sheduler/sheduler.hpp
-)
+set(
+        HEADERS
+        console/log.cpp
+        console/log.hpp
+        console/logExtensions.hpp
+        console/logger.hpp
+        console/loggerBase.cpp
+        console/loggerBase.hpp
+        console/loggerCommon.cpp
+        console/loggerCommon.hpp
+        console/loggerMpi.hpp
+        console/loggerMpi.cpp
+        queue.hpp
+        exception.hpp
+        console/log.hpp
+        ftcl.hpp
+        multithread/queue.hpp
+        sheduler/sheduler.hpp
+        sheduler/shedulerMaster.hpp
+        sheduler/shedulerWorker.hpp
+    )
 
+find_package(MPI)
 
-set(FTCL_COMPILE_OPTIONS
+set(
+        FTCL_COMPILE_OPTIONS
         -std=c++1z
         -Wall
+        -Wextra
+        -g
     )
 
-set(FTCL_LIBRARIES
+set(
+        FTCL_LIBRARIES
     )
 
-set(FTCL_DEFINITION
-   )
+set(
+        FTCL_DEFINITION
+    )
 
-if(WITH_MPI)
-
-    find_package(MPI)
-    if(MPI_CXX_FOUND)
-        list(APPEND FTCL_DEFINITION -DFTCL_MPI_INCLUDED)
-        list(APPEND FTCL_LIBRARIES ${MPI_CXX_LIBRARIES})
-        list(APPEND HEADERS
-                network.cpp
-                network.hpp
+if(MPI_CXX_FOUND)
+    list(APPEND FTCL_DEFINITION -DFTCL_MPI_INCLUDED)
+    list(APPEND FTCL_LIBRARIES ${MPI_CXX_LIBRARIES})
+    list(APPEND HEADERS
+            network.cpp
+            network.hpp
             )
-    endif()
-
+    set(FTCL_MPI_INCLUDED)
 endif()
 
 add_library(${PROJECT_NAME} SHARED ${HEADERS})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${FTCL_LIBRARIES})
 target_include_directories(
         ${PROJECT_NAME}
-        PUBLIC ${MPI_CXX_INCLUDE_PATH} ${CMAKE_SOURCE_DIR}
-    )
+        PUBLIC
+        ${MPI_CXX_INCLUDE_PATH}
+        ${CMAKE_SOURCE_DIR}
+)
 target_compile_options(${PROJECT_NAME} PUBLIC ${FTCL_COMPILE_OPTIONS})
 target_compile_definitions(${PROJECT_NAME} PUBLIC ${FTCL_DEFINITION})
 
@@ -47,18 +63,18 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC ${FTCL_DEFINITION})
 include(FindPkgConfig)
 
 configure_file("${CMAKE_SOURCE_DIR}/templates/ftcl.pc.cmake"
-               "ftcl.pc"
-)
+        "ftcl.pc"
+        )
 
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ftcl.pc"
         DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig"
-)
+        )
 
 install(TARGETS ${PROJECT_NAME}
         DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-)
+        )
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/ftcl/
         DESTINATION include/ftcl
         FILES_MATCHING PATTERN "*.h*"
-)
+        )

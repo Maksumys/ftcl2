@@ -2,6 +2,7 @@
 #ifndef _NETWORK_HPP_INCLUDED
 #define _NETWORK_HPP_INCLUDED
 
+
 /*!
  *  \brief Модуль передачи данных
  *   не правильно работает, если инициализировать в другом singleton'е
@@ -63,7 +64,7 @@ namespace ftcl
 
         std::vector< char >
         getMessage(
-                const MPI_Status &status
+                MPI_Status &status
             );
 
         bool test( NetworkModule::Request &request, NetworkModule::Status &status );
@@ -76,4 +77,4 @@ namespace ftcl
 }
 
 #endif // _NETWORK_HPP_INCLUDED
-#endif // MPI_INCLUDED
+#endif // FTCL_MPI_INCLUDED
