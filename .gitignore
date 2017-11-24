@@ -1,5 +1,6 @@
 *.DS_Store*
 *.txt.user*
 /build
+/xcode
 .idea*
 cmake-build-debug

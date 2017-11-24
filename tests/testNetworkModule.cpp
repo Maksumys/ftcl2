@@ -5,6 +5,13 @@
 #include "ftcl/network.hpp"
 #include "ftcl/console/log.hpp"
 
+
+TEST(NetworkModule, init0)
+{
+    auto &network = ftcl::NetworkModule::Instance( );
+    EXPECT_EQ( network.getName( ), std::string{ "Air-Maksim" } );
+}
+
 TEST(NetworkModule, init)
 {
     auto &network = ftcl::NetworkModule::Instance( );

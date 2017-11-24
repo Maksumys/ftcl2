@@ -1,4 +1,5 @@
 #include "ftcl/console/log.hpp"
+#include "ftcl/console/logger.hpp"
 #include <gtest/gtest.h>
 
 using namespace ftcl::console;

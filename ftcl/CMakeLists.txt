@@ -18,6 +18,8 @@ set(
         sheduler/sheduler.hpp
         sheduler/shedulerMaster.hpp
         sheduler/shedulerWorker.hpp
+        sheduler/status.hpp
+        sheduler/status.cpp
     )
 
 find_package(MPI)
@@ -40,12 +42,13 @@ set(
 
 if(MPI_CXX_FOUND)
     list(APPEND FTCL_DEFINITION -DFTCL_MPI_INCLUDED)
+    list(APPEND FTCL_DEFINITION -DNETWORK_ON)
     list(APPEND FTCL_LIBRARIES ${MPI_CXX_LIBRARIES})
     list(APPEND HEADERS
             network.cpp
             network.hpp
             )
-    set(FTCL_MPI_INCLUDED)
+    set(NETWORK_ON)
 endif()
 
 add_library(${PROJECT_NAME} SHARED ${HEADERS})
@@ -53,8 +56,8 @@ target_link_libraries(${PROJECT_NAME} PUBLIC ${FTCL_LIBRARIES})
 target_include_directories(
         ${PROJECT_NAME}
         PUBLIC
-        ${MPI_CXX_INCLUDE_PATH}
         ${CMAKE_SOURCE_DIR}
+        ${MPI_CXX_INCLUDE_PATH}
 )
 target_compile_options(${PROJECT_NAME} PUBLIC ${FTCL_COMPILE_OPTIONS})
 target_compile_definitions(${PROJECT_NAME} PUBLIC ${FTCL_DEFINITION})

@@ -17,9 +17,32 @@ namespace _ftcl::console
     LoggerMpi::LoggerMpi( )
     {
         if( NetworkModule::Instance( ).master( ) )
-            thread = new std::thread( &LoggerMpi::runMaster, this );
+        {
+            try
+            {
+                thread = new std::thread( &LoggerMpi::runMaster, this );
+            }
+            catch( std::bad_alloc& )
+            {
+                std::cout << "logger was not created on master Node. Abort!" << std::endl;
+                NetworkModule::Instance( ).abort( );
+            }
+        }
         else
-            thread = new std::thread( &LoggerMpi::runWorker, this );
+        {
+            try
+            {
+                thread = new std::thread( &LoggerMpi::runWorker, this );
+            }
+            catch( std::bad_alloc& )
+            {
+                std::cout << "logger was not created on worker Node with name: \""
+                          << NetworkModule::Instance( ).getName( )
+                          << "\""
+                          << " Abort!" << std::endl;
+                NetworkModule::Instance( ).abort( );
+            }
+        }
     }
 
     LoggerMpi::~LoggerMpi( )
@@ -60,6 +83,7 @@ namespace _ftcl::console
             {
                 auto msg = NetworkModule::Instance( ).getMessage( std::get< 1 >( check ) );
                 std::copy( msg.begin( ), msg.end( ), std::ostream_iterator< char >( std::cout, "" ) );
+                std::copy( msg.begin( ), msg.end( ), std::ostream_iterator< char >( file, "" ) );
             }
 
             if( ( exit ) && ( !willExited ) && ( empty( ) ) )

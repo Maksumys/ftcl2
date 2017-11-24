@@ -31,7 +31,7 @@ namespace ftcl::console
                        Logger::Instance( ).getCurrentTime( ) +
                        extensions::Color::RESET;
             #ifdef FTCL_MPI_INCLUDED
-                //msg.numNode  = NetworkModule::Instance( ).getRank( );
+                msg.numNode  = NetworkModule::Instance( ).getRank( );
             #endif
             bool allow = false;
             levelToColor( allow );

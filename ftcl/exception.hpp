@@ -121,6 +121,32 @@ namespace ftcl
                         __lineEx
                     ) { }
         };
+
+        class Attempt_to_send_to_oneself : public Exception
+        {
+        public:
+            Attempt_to_send_to_oneself(
+                    std::string __fileEx,
+                    std::size_t __lineEx
+                ) : Exception(
+                        std::string{ "Attempt to send to oneself!" },
+                        __fileEx,
+                        __lineEx
+                    ) { }
+        };
+
+        class Attempt_to_check_to_oneself : public Exception
+        {
+        public:
+            Attempt_to_check_to_oneself(
+                    std::string __fileEx,
+                    std::size_t __lineEx
+                ) : Exception(
+                        std::string{ "Attempt to check to oneself!" },
+                        __fileEx,
+                        __lineEx
+                    ) { }
+        };
     }
 }
 
