@@ -1,10 +1,18 @@
-#ifndef _FTCL_SHEDULER_HPP_INCLUDED
-#define _FTCL_SHEDULER_HPP_INCLUDED
+#ifndef FTCL_SHEDULER_HPP_INCLUDED
+#define FTCL_SHEDULER_HPP_INCLUDED
 
 #include "ftcl/console/log.hpp"
+#include <queue>
 
 namespace ftcl
 {
+    enum class Events
+    {
+        GetInitializeWorker,
+        GetWorkersName,
+        ShutDown
+    };
+
     class Sheduler
     {
     public:
@@ -12,12 +20,12 @@ namespace ftcl
         virtual ~Sheduler( ) = default;
 
         virtual void run( ) = 0;
-        virtual void initialize( ) = 0;
-        virtual void finalize( ) = 0;
+        //virtual void initialize( ) = 0;
+        //virtual void finalize( ) = 0;
 
         Sheduler( Sheduler& ) = delete;
         Sheduler& operator=( const Sheduler& ) = delete;
     };
 }
 
-#endif // _FTCL_SHEDULER_HPP_INCLUDED
+#endif // FTCL_SHEDULER_HPP_INCLUDED

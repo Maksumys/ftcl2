@@ -251,7 +251,7 @@ namespace _ftcl::console
             throw  exception::Log_was_not_started( __FILE__, __LINE__ );
 
         std::string str = __message.time;
-        //str += " << Node " + std::to_string( __message.numNode ) + " >> ";
+        str += " << Node " + std::to_string( __message.numNode ) + " >> ";
         str +=  __message.color +
                 __message.stream.data( ) +
                 extensions::Color::RESET;

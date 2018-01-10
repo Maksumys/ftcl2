@@ -52,6 +52,10 @@ namespace ftcl::console::extensions
         std::string delimiter { "" };
     };
 
+    /*!
+     * class LogMessage
+     * Тип сообщения пересылки
+     */
     class LogMessage
     {
     public:

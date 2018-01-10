@@ -1,5 +1,5 @@
-#ifndef _FTCL_QUEUE_HPP_INCLUDED
-#define _FTCL_QUEUE_HPP_INCLUDED
+#ifndef FTCL_QUEUE_HPP_INCLUDED
+#define FTCL_QUEUE_HPP_INCLUDED
 
 #include <memory>
 #include <ftcl/exception.hpp>
@@ -145,4 +145,4 @@ namespace ftcl
 
 }
 
-#endif // _FTCL_QUEUE_HPP_INCLUDED
+#endif // FTCL_QUEUE_HPP_INCLUDED

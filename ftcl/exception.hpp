@@ -1,5 +1,5 @@
-#ifndef _FTCL_EXCEPTION_HPP_INCLUDED
-#define _FTCL_EXCEPTION_HPP_INCLUDED
+#ifndef FTCL_EXCEPTION_HPP_INCLUDED
+#define FTCL_EXCEPTION_HPP_INCLUDED
 
 #include <exception>
 #include <string>
@@ -52,6 +52,19 @@ namespace ftcl
                     std::size_t __lineEx
                 ) : Exception(
                             std::string{ "Illegal size message" },
+                            __fileEx,
+                            __lineEx
+                        ) { }
+        };
+
+        class Illegal_state_worker : public Exception
+        {
+            public:
+            Illegal_state_worker(
+                    std::string __fileEx,
+                    std::size_t __lineEx
+                ) : Exception(
+                            std::string{ "Illegal worker state" },
                             __fileEx,
                             __lineEx
                         ) { }
@@ -150,4 +163,4 @@ namespace ftcl
     }
 }
 
-#endif // _FTCL_EXCEPTION_HPP_INCLUDED
+#endif // FTCL_EXCEPTION_HPP_INCLUDED

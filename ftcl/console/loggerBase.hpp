@@ -9,8 +9,8 @@ namespace _ftcl::console
     using namespace ftcl;
 
     /*!
-     * \brief The LoggerBase class является базовым классом логгера
-     * \details Базовый класс логгера реализует общие свойства и методы для логгера и логгера mpi
+     * @brief The LoggerBase class является базовым классом логгера
+     * @details Базовый класс логгера реализует общие свойства и методы для логгера и логгера mpi
      */
     class LoggerBase
     {

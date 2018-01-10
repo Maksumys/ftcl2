@@ -3,4 +3,5 @@
 /build
 /xcode
 .idea*
+.vscode*
 cmake-build-debug

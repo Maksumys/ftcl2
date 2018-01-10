@@ -1,6 +1,5 @@
-#ifdef FTCL_MPI_INCLUDED
-#ifndef _NETWORK_HPP_INCLUDED
-#define _NETWORK_HPP_INCLUDED
+#ifndef FTCL_NETWORK_HPP_INCLUDED
+#define FTCL_NETWORK_HPP_INCLUDED
 
 
 /*!
@@ -14,6 +13,7 @@
 
 #include <cstdint>
 #include <mpi.h>
+#include <mpi-ext.h>
 #include <iostream>
 #include <vector>
 #include <sstream>
@@ -26,6 +26,7 @@ namespace ftcl
      */
     enum class TypeMessage
     {
+        WorkerInitialize,                   ///< сообщение инициализации воркера
         MessageLog,                         ///< сообщение логгера
         MessageLogExit,                     ///< сообщение команды завершения
         requestWorkersName,                 ///< сообщение запроса имени воркера
@@ -57,8 +58,9 @@ namespace ftcl
         std::string         name;                       ///< имя узла на котором запущен процесс
         mutable std::mutex  mutex;                      ///< синхронизация вызовов функций
         int                 empty = 0;                  ///< костыль для пустого сообщения
-
-
+        char** gargv;
+        MPI_Comm world;
+        MPI_Comm rworld;
         NetworkModule( );
     public:
         /*!
@@ -67,6 +69,10 @@ namespace ftcl
          */
         static NetworkModule& Instance( );
 
+        void Spawn( );
+        void initialize( int argc, char **argv );
+
+        int MPIX_Comm_replace( MPI_Comm comm, MPI_Comm *newcomm );
         /*!
          * \brief getSize Возвращает количество процессов
          * \return Кол-во процессов
@@ -97,7 +103,7 @@ namespace ftcl
                 const std::string   &__data,
                 const Number        __toRank,
                 const TypeMessage   __typeMessage
-            ) const;
+            );
 
         /*!
          * \brief send Неблокирующая отправка сообщения без данных
@@ -141,7 +147,9 @@ namespace ftcl
 
         void wait( MPI_Request &request, MPI_Status &status, const std::int64_t sec );
         //void wait( const StatusWorker &state );
+        MPI_Comm getParentComm( );
 
+        static void verbose_errhandler( MPI_Comm *comm, int *perr, ... );
 
     private:
         ~NetworkModule( );
@@ -149,5 +157,4 @@ namespace ftcl
 
 }
 
-#endif // _NETWORK_HPP_INCLUDED
-#endif // FTCL_MPI_INCLUDED
+#endif // FTCL_NETWORK_HPP_INCLUDED

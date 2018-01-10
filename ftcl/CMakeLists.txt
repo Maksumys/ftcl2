@@ -20,16 +20,16 @@ set(
         sheduler/shedulerWorker.hpp
         sheduler/status.hpp
         sheduler/status.cpp
-    )
+        timer.hpp)
 
 find_package(MPI)
 
 set(
         FTCL_COMPILE_OPTIONS
-        -std=c++1z
         -Wall
         -Wextra
         -g
+        -std=c++1z
     )
 
 set(
