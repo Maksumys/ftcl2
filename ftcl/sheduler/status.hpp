@@ -20,6 +20,7 @@ namespace ftcl
         waitingTask,
         working,
         failing,
+        readyToShutDown,
         shutdowning,
     };
 
@@ -28,7 +29,9 @@ namespace ftcl
     public:
         State state;
         std::string name;
-        NetworkModule::Request workerNameRequest;
+        MPI_Request workerNameRequest;
+        MPI_Request workerShutDownRequest;
+        bool sendedShutDown{ false };
         Timer timeCurrentState;
     };
 
@@ -38,12 +41,16 @@ namespace ftcl
         std::vector< _StatusWorker > statuses;
         std::size_t countInitializedWorkers;
         std::size_t secWaitSend{ 3 };
+
+        std::size_t countShutDownWorkers{ 0 };
         
         explicit StatusWorker( const std::uint64_t &__countWorkers );
         bool recvInitialize( const std::size_t __numWorkers );
-        void getWorkersName( const std::size_t __numWorkers );
+        bool getWorkersName( const std::size_t __numWorkers );
         void printStatusWorkers( );
+        bool shutDown( const std::size_t __numWorkers );
         bool isAllInitialize( );
+        std::string getWorkerName( std::size_t numWorker );
     };
 
 }

@@ -160,6 +160,19 @@ namespace ftcl
                         __lineEx
                     ) { }
         };
+
+        class Error_worker_shutDown : public Exception
+        {
+        public:
+            Error_worker_shutDown(
+                    std::string __fileEx,
+                    std::size_t __lineEx
+            ) : Exception(
+                    std::string{ "Error worker shutdown" },
+                    __fileEx,
+                    __lineEx
+                         ) { }
+        };
     }
 }
 

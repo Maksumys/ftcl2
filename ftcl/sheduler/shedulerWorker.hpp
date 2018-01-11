@@ -9,6 +9,13 @@
 
 namespace ftcl
 {
+    enum class WorkerState
+    {
+        idle,
+        shutDown,
+        fail
+    };
+
     class ShedulerWorker : public Sheduler
     {
     protected:
@@ -21,6 +28,8 @@ namespace ftcl
             console::Log( ) << console::extensions::Level::Debug2
                             << "Create sheduler Worker";
             events.push( std::make_tuple( 0, Events::GetInitializeWorker ) );
+            events.push( std::make_tuple( 0, Events::GetWorkersName ) );
+            events.push( std::make_tuple( 0, Events::ShutDown ) );
         }
 
         void run( ) override
@@ -28,11 +37,16 @@ namespace ftcl
             using namespace console;
 
             NetworkModule::Request reqWorkInit;
-            
-            std::size_t timeWorkInit{ 10000 };
-            Timer timer;
-            timer.start( );
             bool sendedWorkInit{ false };
+            Timer timerWorkInit;
+
+            NetworkModule::Request reqWorkName;
+            bool sendedWorkName{ false };
+            Timer timerWorkName;
+
+
+            std::size_t timeWorkInit{ 10000 };
+
 
             while( !events.empty( ) )
             {
@@ -43,6 +57,7 @@ namespace ftcl
                     {
                         if( !sendedWorkInit )
                         {
+                            timerWorkInit.start( );
                             reqWorkInit = NetworkModule::Instance( ).send( num, TypeMessage::WorkerInitialize );
                             sendedWorkInit = true;
                         }
@@ -52,13 +67,58 @@ namespace ftcl
                         if( test )
                             break;
 
-                        if( timer.end( ) < timeWorkInit )
+                        if( timerWorkInit.end( ) < timeWorkInit )
                             events.push( std::make_tuple( num, event ) );
                         else
                         {
                             NetworkModule::Instance( ).cancel( reqWorkInit );
                             sendedWorkInit = false;                                                        
                             Log( ) << "Worker don't send init to master!";
+                        }
+                        break;
+                    }
+                    case Events::GetWorkersName:
+                    {
+                        if( !sendedWorkName )
+                        {
+                            auto[ check, status ] = NetworkModule::Instance( ).checkMessage( 0, TypeMessage::MessageWorkerName );
+                            if( check )
+                            {
+                                NetworkModule::Instance( ).getMessage( status );
+                                timerWorkName.start( );
+                                reqWorkName = NetworkModule::Instance( ).send(
+                                        NetworkModule::Instance( ).getName( ),
+                                        0,
+                                        TypeMessage::MessageWorkerName
+                                     );
+                                sendedWorkName = true;
+                            }
+                        }
+                        else
+                        {
+                            NetworkModule::Status status;
+                            auto test = NetworkModule::Instance( ).test( reqWorkName, status );
+                            if( test )
+                                break;
+
+                            if( timerWorkName.end( ) < timeWorkInit )
+                                events.push( std::make_tuple( num, event ) );
+                            else
+                            {
+                                NetworkModule::Instance( ).cancel( reqWorkName );
+                                sendedWorkName = false;
+                                Log( ) << "Worker don't send name to master!";
+                            }
+                        }
+                        break;
+                    }
+                    case Events::ShutDown:
+                    {
+                        auto[ check, status ] = NetworkModule::Instance( ).checkMessage( 0, TypeMessage::MessageShutdownMasterToWorker );
+                        if( check )
+                        {
+                            NetworkModule::Instance( ).getMessage( status );
+
                         }
                         break;
                     }

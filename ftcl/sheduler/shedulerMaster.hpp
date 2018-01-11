@@ -40,8 +40,6 @@ namespace ftcl
             {
                 events.push( std::make_tuple( i + 1, Events::GetInitializeWorker ) );
             }
-
-
         }
 
         void run( ) override
@@ -60,6 +58,7 @@ namespace ftcl
                             if( statuses.recvInitialize( numWorker ) )
                             {
                                 Log( ) << "Worker " << numWorker << " initialized!";
+                                events.push( std::make_tuple( numWorker, Events::GetWorkersName ) );
                                 init = true;
                             }
                         }
@@ -70,28 +69,68 @@ namespace ftcl
 
                         if( !init )
                         {
-                            events.push( std::make_tuple( numWorker, event ));
+                            events.push( std::make_tuple( numWorker, event ) );
                         }
                         else
                         {
                             statuses.printStatusWorkers( );
                         }
+                        break;
                     }
                     case Events::GetWorkersName:
                     {
-                        statuses.getWorkersName( numWorker );
-                        //getWorkersName( numWorker, event );
+                        try
+                        {
+                            if( !statuses.getWorkersName( numWorker ) )
+                                events.push( std::make_tuple( numWorker, event ) );
+                            else
+                            {
+                                Log( ) << "Master recv worker name( "
+                                       << statuses.getWorkerName( numWorker )
+                                       << " )! NumWorker: "
+                                       << numWorker;
+                                events.push( std::make_tuple( numWorker, Events::ShutDown ) );
+                            }
+                        }
+                        catch( Exception &e )
+                        {
+                            Log( ) << e.what( );
+                        }
                         break;
                     }
                     case Events::ShutDown:
                     {
+                        try
+                        {
+                            if( !statuses.shutDown( numWorker ) )
+                            {
+                                events.push( std::make_tuple( numWorker, event ) );
+                            }
+                            else
+                            {
+                                Log( ) << "Master recv worker shutdown( "
+                                       << statuses.getWorkerName( numWorker )
+                                       << " )! NumWorker: "
+                                       << numWorker;
+                                statuses.countShutDownWorkers++;
+                            }
+                        }
+                        catch( Exception &e )
+                        {
+                            Log( ) << e.what( );
+                        }
                         break;
                     }
                 }
                 events.pop( );
             }
-        }
 
+            if( statuses.countShutDownWorkers < NetworkModule::Instance().getSize( ) )
+            {
+                Log( ) << "ABORT!";
+                NetworkModule::Instance( ).abort( );
+            }
+        }
 
         /*void initialize( ) override
         {

@@ -151,6 +151,11 @@ namespace ftcl
 
         static void verbose_errhandler( MPI_Comm *comm, int *perr, ... );
 
+        void Abort( )
+        {
+            MPI_Abort( world, 10 );
+        }
+
     private:
         ~NetworkModule( );
     };
