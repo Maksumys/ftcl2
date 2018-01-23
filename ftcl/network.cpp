@@ -198,12 +198,12 @@ namespace ftcl
         return request;
     }
 
-    std::vector< char >
+    std::string
     NetworkModule::getMessage(
             MPI_Status &status
         )
     {
-        std::vector< char > buf;
+        std::string buf;
         while( true )
         {
             std::unique_lock< std::mutex > guard( mutex );
@@ -267,6 +267,32 @@ namespace ftcl
         std::unique_lock< std::mutex > guard( mutex );
         MPI_Abort( MPI_COMM_WORLD, 0 );
     }
+
+    std::tuple< bool, MPI_Status >
+    NetworkModule::checkMessage( )
+    {
+        MPI_Status status;
+        int messageFounded;
+        while( true )
+        {
+            std::unique_lock< std::mutex > guard( mutex );
+            int rc = MPI_Iprobe(
+                        MPI_ANY_SOURCE,
+                        MPI_ANY_TAG,
+                        world,
+                        &messageFounded,
+                        &status
+                               );
+            if( rc != MPI_SUCCESS )
+            {
+                std::cout << "IN check message replace" << std::endl;
+                Spawn( );
+            }
+            else
+                break;
+        }
+        return std::make_tuple( messageFounded == 1, status );
+    };
 
     std::tuple< bool, MPI_Status >
     NetworkModule::checkMessage( Number source, TypeMessage typeMessage )

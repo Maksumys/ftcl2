@@ -1,3 +1,5 @@
+cmake_minimum_required(VERSION 3.9)
+set(CMAKE_CXX_STANDARD 17)
 set(
         HEADERS
         console/log.cpp
@@ -20,7 +22,8 @@ set(
         sheduler/shedulerWorker.hpp
         sheduler/status.hpp
         sheduler/status.cpp
-        timer.hpp)
+        timer.hpp
+        message_manager.hpp message.hpp)
 
 find_package(MPI)
 
@@ -29,7 +32,7 @@ set(
         -Wall
         -Wextra
         -g
-        -std=c++1z
+        -std=c++17
     )
 
 set(
@@ -65,19 +68,23 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC ${FTCL_DEFINITION})
 
 include(FindPkgConfig)
 
-configure_file("${CMAKE_SOURCE_DIR}/templates/ftcl.pc.cmake"
+configure_file(
+        "${CMAKE_SOURCE_DIR}/templates/ftcl.pc.cmake"
         "ftcl.pc"
-        )
+    )
 
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ftcl.pc"
+install(
+        FILES "${CMAKE_CURRENT_BINARY_DIR}/ftcl.pc"
         DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig"
-        )
+    )
 
-install(TARGETS ${PROJECT_NAME}
+install(
+        TARGETS ${PROJECT_NAME}
         DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-        )
+    )
 
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/ftcl/
+install(
+        DIRECTORY ${CMAKE_SOURCE_DIR}/ftcl/
         DESTINATION include/ftcl
         FILES_MATCHING PATTERN "*.h*"
-        )
+    )

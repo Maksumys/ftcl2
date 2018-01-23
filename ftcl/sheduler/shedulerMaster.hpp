@@ -1,5 +1,5 @@
-#ifndef FTCL_SHEDULER_MASTER_HPP_INCLUDED
-#define FTCL_SHEDULER_MASTER_HPP_INCLUDED
+#ifndef FTCL_SHEDULER_MASTER_HPP_INCLUDEDD
+#define FTCL_SHEDULER_MASTER_HPP_INCLUDEDD
 
 #include "ftcl/network.hpp"
 #include "ftcl/sheduler/sheduler.hpp"
@@ -11,9 +11,6 @@
 
 namespace ftcl
 {
-    /*!
-     *
-     */
     class ShedulerMaster : public Sheduler
     {
     protected:

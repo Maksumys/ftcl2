@@ -1,5 +1,5 @@
-#ifndef _FTCL_SHEDULER_WORKER_HPP_INCLUDED
-#define _FTCL_SHEDULER_WORKER_HPP_INCLUDED
+#ifndef FTCL_SHEDULER_WORKER_HPP_INCLUDED
+#define FTCL_SHEDULER_WORKER_HPP_INCLUDED
 
 #include "ftcl/sheduler/sheduler.hpp"
 #include "ftcl/network.hpp"

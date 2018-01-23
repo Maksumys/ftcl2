@@ -24,6 +24,7 @@ namespace ftcl
             throw exception::Illegal_rank( __FILE__, __LINE__ );
         if( statuses[ __numWorkers - 1 ].state != State::idle )
             throw exception::Illegal_state_worker( __FILE__, __LINE__ );
+
         auto[ check, status ] = NetworkModule::Instance( ).checkMessage( __numWorkers, TypeMessage::WorkerInitialize );
         if( check )
         {

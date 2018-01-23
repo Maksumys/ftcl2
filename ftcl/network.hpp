@@ -1,7 +1,5 @@
 #ifndef FTCL_NETWORK_HPP_INCLUDED
 #define FTCL_NETWORK_HPP_INCLUDED
-
-
 /*!
  *  \brief Модуль передачи данных
  *   не правильно работает, если инициализировать в другом singleton'е
@@ -9,7 +7,6 @@
  */
 
 #include "ftcl/exception.hpp"
-#include "ftcl/sheduler/status.hpp"
 
 #include <cstdint>
 #include <mpi.h>
@@ -18,6 +15,9 @@
 #include <vector>
 #include <sstream>
 #include <mutex>
+#include <map>
+#include <thread>
+#include <chrono>
 
 namespace ftcl
 {
@@ -58,9 +58,9 @@ namespace ftcl
         std::string         name;                       ///< имя узла на котором запущен процесс
         mutable std::mutex  mutex;                      ///< синхронизация вызовов функций
         int                 empty = 0;                  ///< костыль для пустого сообщения
-        char** gargv;
-        MPI_Comm world;
-        MPI_Comm rworld;
+        char**              gargv;
+        MPI_Comm            world;
+        MPI_Comm            rworld;
         NetworkModule( );
     public:
         /*!
@@ -128,13 +128,17 @@ namespace ftcl
                 const Number source,
                 const TypeMessage typeMessage
             );
+        std::tuple< bool, MPI_Status >
+        checkMessage(
+            );
+
 
         /*!
          * \brief getMessage Взятие входящего сообщения
          * \param status Данные входящего сообщения
          * \return Сообщение
          */
-        std::vector< char >
+        std::string
         getMessage(
                 MPI_Status &status
             );
@@ -146,20 +150,14 @@ namespace ftcl
         void abort( );
 
         void wait( MPI_Request &request, MPI_Status &status, const std::int64_t sec );
-        //void wait( const StatusWorker &state );
         MPI_Comm getParentComm( );
-
-        static void verbose_errhandler( MPI_Comm *comm, int *perr, ... );
-
         void Abort( )
         {
             MPI_Abort( world, 10 );
         }
-
     private:
         ~NetworkModule( );
     };
-
 }
 
 #endif // FTCL_NETWORK_HPP_INCLUDED
