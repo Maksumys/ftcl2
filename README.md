@@ -34,7 +34,7 @@
 Отправка запросов на имена worker'ов. Один из запросов закончился с ошибкой.</div>
 	![](workersName2.jpg)<br>
 Делаем реинициализацию worker'а.  
-![](getName3.jpg)<br>
+![](https://cvws.icloud-content.com/B/ARlK7y1L8TvDaMCvaI4-liczXHPTAQj5G8jUGZQv2jHV90FU2ORQbD7j/getName3.jpg?o=AtZS7vOXXcaRtbZP9AoHeHndiInckfUKdnBtpdzNsFeC&v=1&x=3&a=B8DJbHELdWmkzHJReTQ3AzlO9HmyAzazQAEAAAMns0A&e=1516714866&k=XEfg9RhimBdWvETBg26w0g&fl=&r=049b9ae6-5590-42f5-a896-6d090514f0c1-1&ckc=com.apple.clouddocs&ckz=27N4MQEA55.pro.writer&p=30&s=vgJgljTyAgTS4Nlm8NZ7Fk9h6sw&cd=i)<br>
 Для пересозданнаого worker'а переходим к пункту 1.
 ###3. Работа
 ###4. Завершение работы
