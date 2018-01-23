@@ -27,14 +27,20 @@ namespace ftcl
 
         void initialize( )
         {
-            handler.emplace( typeid( message0 ).hash_code( ), std::queue{ } );
-            handler.emplace( typeid( message1 ).hash_code( ), std::queue{ } );
-            handler.emplace( typeid( message2 ).hash_code( ), std::queue{ } );
+            registerMessage< message0 >( );
+            registerMessage< message1 >( );
+            registerMessage< message2 >( );
             isStop = false;
             if( thread == nullptr )
                 thread = new std::thread( &runRead, this );
         }
 
+        template< class TypeMessage >
+        void registerMessage( )
+        {
+            handler.emplace( typeid( TypeMessage ).hash_code( ), std::queue{ } );
+        }
+        
         template < class TypeMessage >
         std::optional< TypeMessage >
         getMessage( )
