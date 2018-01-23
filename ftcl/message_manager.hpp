@@ -36,13 +36,23 @@ namespace ftcl
         }
 
         template < class TypeMessage >
-        std::optional< TypeMessage > getMessage( )
+        std::optional< TypeMessage >
+        getMessage( )
         {
             std::lock_guard lock( mutex );
-            if( 
-            auto buf = handler[ typeid( TypeMessage ).hash_code( ) ].front( );
-            handler[ typeid( TypeMessage ).hash_code( ) ].pop( );
-            return *static_cast< TypeMessage* >( buf );
+            if( !handler[ typeid( TypeMessage ).hash_code( ) ].empty( ) )
+            {
+                auto buf = handler[ typeid( TypeMessage ).hash_code( ) ].front( );
+                handler[ typeid( TypeMessage ).hash_code( ) ].pop( );
+                std::stringstream stream( buf );
+                TypeMessage message;
+                stream >> message;
+                return message;
+            }
+            else
+            {
+                return { };
+            }
         }
 
         void runRead( )
@@ -58,13 +68,19 @@ namespace ftcl
                     std::string string;
                     stream >> hash;
                     stream >> string;
-                    handler[ hash ]( std::move( stream ) );
+                    std::lock_guard lock( mutex );
+                    handler[ hash ].push( std::move( stream ) );
                 }
 
                 std::this_thread::sleep_for( std::chrono::milliseconds{ 1 } );
             }
         }
 
+        void stop( )
+        {
+            isStop = true;
+        }
+        
         ~messageManager( )
         {
             isStop = true;
