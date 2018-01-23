@@ -9,6 +9,7 @@
 #include <thread>
 #include <mutex>
 #include <queue>
+#include <optional>
 
 #include "ftcl/network.hpp"
 #include "ftcl/message.hpp"
@@ -18,7 +19,7 @@ namespace ftcl
     class messageManager
     {
     public:
-        std::map< std::size_t, std::queue< message* > > handler;
+        std::map< std::size_t, std::queue< std::string > > handler;
         std::thread *thread{ nullptr };
         std::mutex mutex;
         bool isStop{ true };
@@ -35,9 +36,10 @@ namespace ftcl
         }
 
         template < class TypeMessage >
-        TypeMessage getMessage( )
+        std::optional< TypeMessage > getMessage( )
         {
             std::lock_guard lock( mutex );
+            if( 
             auto buf = handler[ typeid( TypeMessage ).hash_code( ) ].front( );
             handler[ typeid( TypeMessage ).hash_code( ) ].pop( );
             return *static_cast< TypeMessage* >( buf );
