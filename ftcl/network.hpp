@@ -128,6 +128,7 @@ namespace ftcl
                 const Number source,
                 const TypeMessage typeMessage
             );
+
         std::tuple< bool, MPI_Status >
         checkMessage(
             );

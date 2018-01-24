@@ -4,17 +4,13 @@
 
 #include "ftcl/console/loggerBase.hpp"
 #include "ftcl/console/logExtensions.hpp"
+#include "ftcl/message_manager.hpp"
 
 #include <mpi.h>
 
 namespace _ftcl::console
 {
     using namespace ftcl::console;
-
-    enum class MpiMode
-    {
-        mpiMaster, mpiWorker
-    };
 
     class LoggerMpi : public LoggerBase
     {

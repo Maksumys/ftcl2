@@ -75,7 +75,7 @@ namespace ftcl
                     stream >> hash;
                     stream >> string;
                     std::lock_guard lock( mutex );
-                    handler[ hash ].push( std::move( stream ) );
+                    handler[ hash ].push( string );
                 }
 
                 std::this_thread::sleep_for( std::chrono::milliseconds{ 1 } );
