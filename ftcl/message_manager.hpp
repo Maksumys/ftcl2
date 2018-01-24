@@ -18,14 +18,18 @@ namespace ftcl
 {
     class messageManager
     {
-    public:
+    protected:
         std::map< std::size_t, std::queue< std::string > > handler;
         std::thread *thread{ nullptr };
         std::mutex mutex;
         bool isStop{ true };
-
-
-        void initialize( )
+        
+        messageMenager( const messageMenager& ) = delete;
+        messgeMenager( messageMenager&& ) = delete;
+        messageMenager operator=( const messageMenager& ) = delete;
+        messageMenager operator=( messageMenager&& ) = delete;
+        
+        messageManager( )
         {
             registerMessage< message0 >( );
             registerMessage< message1 >( );
@@ -34,10 +38,17 @@ namespace ftcl
             if( thread == nullptr )
                 thread = new std::thread( &runRead, this );
         }
+    public:
+        messageMenager& Instance( )
+        {
+            static messageMenager menager;
+            return menager;
+        }
 
         template< class TypeMessage >
         void registerMessage( )
         {
+            std::lock_guard lock( mutex );
             handler.emplace( typeid( TypeMessage ).hash_code( ), std::queue{ } );
         }
         
