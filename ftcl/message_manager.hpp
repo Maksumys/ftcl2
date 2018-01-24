@@ -1,7 +1,3 @@
-//
-// Created by Максим Кузин on 23.01.2018.
-//
-
 #ifndef FTCL_MESSAGE_MANAGER_HPP
 #define FTCL_MESSAGE_MANAGER_HPP
 
@@ -13,19 +9,25 @@
 
 #include "ftcl/network.hpp"
 #include "ftcl/message.hpp"
+#include "ftcl/queue.hpp"
 
 namespace ftcl
 {
     class messageManager
     {
-    public:
-        std::map< std::size_t, std::queue< std::string > > handler;
+    protected:
+        std::map< std::size_t, queue< std::string > > inMessages;
+        queue< std::string > outMessages{ 1000 };
         std::thread *thread{ nullptr };
         std::mutex mutex;
         bool isStop{ true };
-
-
-        void initialize( )
+        
+        messageMenager( const messageMenager& ) = delete;
+        messageMenager( messageMenager&& ) = delete;
+        messageMenager operator=( const messageMenager& ) = delete;
+        messageMenager operator=( messageMenager&& ) = delete;
+        
+        messageManager( )
         {
             registerMessage< message0 >( );
             registerMessage< message1 >( );
@@ -34,11 +36,18 @@ namespace ftcl
             if( thread == nullptr )
                 thread = new std::thread( &runRead, this );
         }
+    public:
+        messageMenager& Instance( )
+        {
+            static messageMenager menager;
+            return menager;
+        }
 
         template< class TypeMessage >
         void registerMessage( )
         {
-            handler.emplace( typeid( TypeMessage ).hash_code( ), std::queue{ } );
+            std::lock_guard lock( mutex );
+            inMessages.emplace( typeid( TypeMessage ).hash_code( ), queue{ } );
         }
         
         template < class TypeMessage >
@@ -46,10 +55,10 @@ namespace ftcl
         getMessage( )
         {
             std::lock_guard lock( mutex );
-            if( !handler[ typeid( TypeMessage ).hash_code( ) ].empty( ) )
+            if( !inMessages[ typeid( TypeMessage ).hash_code( ) ].empty( ) )
             {
-                auto buf = handler[ typeid( TypeMessage ).hash_code( ) ].front( );
-                handler[ typeid( TypeMessage ).hash_code( ) ].pop( );
+                auto buf = inMessages[ typeid( TypeMessage ).hash_code( ) ].front( );
+                inMessages[ typeid( TypeMessage ).hash_code( ) ].pop( );
                 std::stringstream stream( buf );
                 TypeMessage message;
                 stream >> message;
@@ -60,8 +69,17 @@ namespace ftcl
                 return { };
             }
         }
+        
+        template< class TypeMessage >
+        void setMessage( TypeMessage &&message )
+        {
+            std::stringstream stream;
+            stream << typeid( TypeMessage ).hash_code( );
+            stream << message;
+            outMessages.push( std::move( message ) );
+        }
 
-        void runRead( )
+        void run( )
         {
             while( !isStop )
             {
@@ -75,9 +93,15 @@ namespace ftcl
                     stream >> hash;
                     stream >> string;
                     std::lock_guard lock( mutex );
-                    handler[ hash ].push( string );
+                    inMessages[ hash ].push( std::move( stream ) );
                 }
 
+                if( !outMessages.empty( ) )
+                {
+                    NetworkModule::Instance( ).send( outMessage.front( ) );
+                    outMessage.pop( );
+                }
+                
                 std::this_thread::sleep_for( std::chrono::milliseconds{ 1 } );
             }
         }
