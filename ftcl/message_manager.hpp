@@ -16,11 +16,17 @@ namespace ftcl
     class messageManager
     {
     protected:
-        std::map< std::size_t, queue< std::string > > inMessages;
-        queue< std::tuple< std::size_t, std::string > > outMessages{ 1000 };
-        std::thread *thread{ nullptr };
-        std::mutex mutex;
-        bool isStop{ true };
+        std::map< std::size_t, queue< std::string > > inMessages;              ///< входящие сообщения
+        queue< std::tuple< 
+                           std::size_t,                                        ///< номер узла
+                           NetworkModule::Request,                             ///< ссылка на пересылку
+                           bool,                                               ///< неудачная пересылка
+                           std::string                                         ///< сериализованные данные
+                          >
+             >                                         outMessages{ 1000 };    ///< исходящие сообщения
+        std::thread                                    *thread{ nullptr };     ///< управляющий поток
+        std::mutex                                     mutex;                  ///< синхронизация доступа
+        bool                                           isStop{ true };         ///< признак остановки управляющего потока
 
         messageManager( const messageManager& ) = delete;
         messageManager( messageManager&& ) = delete;
@@ -78,7 +84,7 @@ namespace ftcl
             message.from_rank = NetworkModule::Instance( ).getRank( );
             stream << typeid( TypeMessage ).hash_code( );
             stream << message;
-            outMessages.push( std::make_tuple( to_rank, message ) );
+            outMessages.push( std::make_tuple( to_rank, NetworkModule::Request{ }, bool{ false }, message ) );
         }
 
         void run( )
@@ -100,6 +106,7 @@ namespace ftcl
 
                 if( !outMessages.empty( ) )
                 {
+                    auto [ rank, req, isFail, serializedMess ] = outMessage.front( );
                     NetworkModule::Instance( ).send( outMessage.front( ) );
                     outMessage.pop( );
                 }
