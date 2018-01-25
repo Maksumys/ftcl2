@@ -7,6 +7,9 @@ namespace ftcl
 {
     class message
     {
+    public:
+        int fromRank;
+        int toRank;
     };
 
 

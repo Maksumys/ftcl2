@@ -17,15 +17,15 @@ namespace ftcl
     {
     protected:
         std::map< std::size_t, queue< std::string > > inMessages;
-        queue< std::string > outMessages{ 1000 };
+        queue< std::tuple< std::size_t, std::string > > outMessages{ 1000 };
         std::thread *thread{ nullptr };
         std::mutex mutex;
         bool isStop{ true };
-        
-        messageMenager( const messageMenager& ) = delete;
-        messageMenager( messageMenager&& ) = delete;
-        messageMenager operator=( const messageMenager& ) = delete;
-        messageMenager operator=( messageMenager&& ) = delete;
+
+        messageManager( const messageManager& ) = delete;
+        messageManager( messageManager&& ) = delete;
+        messageManager operator=( const messageManager& ) = delete;
+        messageManager operator=( messageManager&& ) = delete;
         
         messageManager( )
         {
@@ -34,13 +34,13 @@ namespace ftcl
             registerMessage< message2 >( );
             isStop = false;
             if( thread == nullptr )
-                thread = new std::thread( &runRead, this );
+                thread = new std::thread( &run, this );
         }
     public:
-        messageMenager& Instance( )
+        messageManager& Instance( )
         {
-            static messageMenager menager;
-            return menager;
+            static messageManager maneger;
+            return maneger;
         }
 
         template< class TypeMessage >
@@ -74,9 +74,11 @@ namespace ftcl
         void setMessage( TypeMessage &&message )
         {
             std::stringstream stream;
+            std::size_t to_rank = message.to_rank;
+            message.from_rank = NetworkModule::Instance( ).getRank( );
             stream << typeid( TypeMessage ).hash_code( );
             stream << message;
-            outMessages.push( std::move( message ) );
+            outMessages.push( std::make_tuple( to_rank, message ) );
         }
 
         void run( )
