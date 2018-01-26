@@ -2,6 +2,7 @@
 
 #include "ftcl/console/loggerMpi.hpp"
 #include "ftcl/network.hpp"
+#include "ftcl/message_maneger.hpp"
 
 #include <iterator>
 
@@ -78,10 +79,9 @@ namespace _ftcl::console
             else
                 std::this_thread::sleep_for( std::chrono::microseconds( 1 ) );
 
-            auto check = NetworkModule::Instance( ).checkMessage( -1, TypeMessage::MessageLog );
-            if( std::get< 0 >( check ) )
+            auto message = MessageManeger::Instance( ).getMessage< TypeMessage::MessageLog >( );
+            if( message )
             {
-                auto msg = NetworkModule::Instance( ).getMessage( std::get< 1 >( check ) );
                 std::copy( msg.begin( ), msg.end( ), std::ostream_iterator< char >( std::cout, "" ) );
                 std::copy( msg.begin( ), msg.end( ), std::ostream_iterator< char >( file, "" ) );
             }
