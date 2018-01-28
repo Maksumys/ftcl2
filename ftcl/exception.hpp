@@ -36,6 +36,14 @@ namespace ftcl
 
         };
 
+        class Error_communication : public Exception
+        {
+        public:
+            Error_communication(
+                    std::string __fileEx, std::size_t __lineEx
+            ) : Exception( std::string{ "Error communication" }, __fileEx, __lineEx ) { }
+        };
+
         class Queue_empty : public Exception
         {
         public:

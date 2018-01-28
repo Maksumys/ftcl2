@@ -2,7 +2,6 @@
 
 #include "ftcl/console/loggerMpi.hpp"
 #include "ftcl/network.hpp"
-#include "ftcl/message_maneger.hpp"
 
 #include <iterator>
 
@@ -79,9 +78,10 @@ namespace _ftcl::console
             else
                 std::this_thread::sleep_for( std::chrono::microseconds( 1 ) );
 
-            auto message = MessageManeger::Instance( ).getMessage< TypeMessage::MessageLog >( );
-            if( message )
+            auto check = NetworkModule::Instance( ).checkMessage( -1, TypeMessage::MessageLog );
+            if( std::get< 0 >( check ) )
             {
+                auto msg = NetworkModule::Instance( ).getMessage( std::get< 1 >( check ) );
                 std::copy( msg.begin( ), msg.end( ), std::ostream_iterator< char >( std::cout, "" ) );
                 std::copy( msg.begin( ), msg.end( ), std::ostream_iterator< char >( file, "" ) );
             }
@@ -129,7 +129,7 @@ namespace _ftcl::console
                 {
                     NetworkModule::Request request = NetworkModule::Instance( ).send(
                             multiQueueStream.back( ), 0, TypeMessage::MessageLog
-                        );
+                                                                                    );
 
                     NetworkModule::Status status;
                     auto start = std::chrono::steady_clock::now( );
@@ -154,8 +154,8 @@ namespace _ftcl::console
                     NetworkModule::Status status;
                     std::string str = " ";
                     NetworkModule::Request request = NetworkModule::Instance( ).send(
-                           str, 0, TypeMessage::MessageLogExit
-                        );
+                            str, 0, TypeMessage::MessageLogExit
+                                                                                    );
 
                     auto start = std::chrono::steady_clock::now( );
                     while( true )
@@ -219,11 +219,11 @@ namespace _ftcl::console
             {
                 if( !std::get< 1 >( elem ) )
                 {
-                        if( NetworkModule::Instance().test( std::get< 0 >( elem ), status ) )
-                        {
-                            count++;
-                            std::get< 1 >( elem ) = true;
-                        }
+                    if( NetworkModule::Instance().test( std::get< 0 >( elem ), status ) )
+                    {
+                        count++;
+                        std::get< 1 >( elem ) = true;
+                    }
                 }
             }
 

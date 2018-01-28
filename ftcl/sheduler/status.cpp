@@ -1,8 +1,4 @@
 #include "ftcl/sheduler/status.hpp"
-#include "ftcl/exception.hpp"
-#include "ftcl/console/log.hpp"
-
-#include <string>
 
 namespace ftcl
 {
@@ -13,10 +9,6 @@ namespace ftcl
         for( auto &stat : statuses )
             stat.state = State::idle;
     }
-    bool StatusWorker::isAllInitialize( )
-    {
-        return false;
-    }
 
     bool StatusWorker::recvInitialize( const std::size_t __numWorkers )
     {
@@ -25,22 +17,43 @@ namespace ftcl
         if( statuses[ __numWorkers - 1 ].state != State::idle )
             throw exception::Illegal_state_worker( __FILE__, __LINE__ );
 
-        auto[ check, status ] = NetworkModule::Instance( ).checkMessage( __numWorkers, TypeMessage::WorkerInitialize );
+        bool check;
+        NetworkModule::Status status;
+        std::tie( check, status ) = NetworkModule::Instance( ).checkMessage( __numWorkers, TypeMessage::WorkerInitialize );
         if( check )
         {
             NetworkModule::Instance( ).getMessage( status );
             statuses[ __numWorkers - 1 ].state = State::initialize;
             console::Log( ) << "initialized " << __numWorkers;
             countInitializedWorkers++;
+            statuses[ __numWorkers - 1 ].isInit = true;
         }
+
+        if( NetworkModule::Instance( ).getError( ) )
+        {
+            auto proc = NetworkModule::Instance( ).getFailingProc( );
+            for( auto &elem : proc )
+            {
+                statuses[ elem - 1 ] = _StatusWorker{ };
+            }
+            return false;
+        }
+
         return check;
     }
 
     bool StatusWorker::getWorkersName( const std::size_t __numWorkers )
     {
+        if( TEST )
+        {
+            std::this_thread::sleep_for( std::chrono::seconds{ 10 } );
+            TEST = false;
+        }
+
         if( __numWorkers >= NetworkModule::Instance( ).getSize( ) )
             throw exception::Illegal_rank( __FILE__, __LINE__ );
-        if( ( statuses[ __numWorkers - 1 ].state != State::initialize ) && ( statuses[ __numWorkers - 1 ].state != State::waitingName ) )
+        if( ( statuses[ __numWorkers - 1 ].state != State::initialize ) &&
+            ( statuses[ __numWorkers - 1 ].state != State::waitingName ) )
             throw exception::Illegal_state_worker( __FILE__, __LINE__ );
 
         if( statuses[ __numWorkers - 1 ].state == State::initialize )
@@ -48,29 +61,44 @@ namespace ftcl
             statuses[ __numWorkers - 1 ].workerNameRequest = NetworkModule::Instance( ).send( __numWorkers, TypeMessage::MessageWorkerName );
             statuses[ __numWorkers - 1 ].timeCurrentState.start( );
             statuses[ __numWorkers - 1 ].state = State::waitingName;
+            console::Log( ) << "master send req to worker";
+
         }
         if( statuses[ __numWorkers - 1 ].state == State::waitingName )
         {
-            auto[ check, status ] = NetworkModule::Instance( ).checkMessage( __numWorkers, TypeMessage::MessageWorkerName );
+            auto[ check, status ] = NetworkModule::Instance( ).checkMessage( __numWorkers, TypeMessage::requestWorkersName );
             if( check )
             {
                 auto buf = NetworkModule::Instance( ).getMessage( status );
-                for( std::size_t i = 0; i < buf.size( ); i++ )
-                {
-                    statuses[ __numWorkers - 1 ].name += buf[ i ];
-                }
-
+                statuses[ __numWorkers - 1 ].name = buf;
                 ///////// TODO! изменить потом на waitingTask
-
                 statuses[ __numWorkers - 1 ].state = State::readyToShutDown;
             }
-            if( statuses[ __numWorkers - 1 ].timeCurrentState.end( ) >= 3 )
+            if( statuses[ __numWorkers - 1 ].timeCurrentState.end( ) >= 7000 )
             {
                 NetworkModule::Instance( ).cancel( statuses[ __numWorkers - 1 ].workerNameRequest );
                 statuses[ __numWorkers - 1 ].state = State::failing;
             }
+
+            if( NetworkModule::Instance( ).getError( ) )
+            {
+                auto proc = NetworkModule::Instance( ).getFailingProc( );
+                for( auto &elem : proc )
+                {
+                    statuses[ elem - 1 ] = _StatusWorker{ };
+                }
+                return false;
+            }
+
             return check;
         }
+
+        if( NetworkModule::Instance( ).getError( ) )
+        {
+            statuses[ __numWorkers - 1 ] = _StatusWorker{ };
+            return false;
+        }
+
         return false;
     }
 
@@ -85,19 +113,28 @@ namespace ftcl
             switch( elem.state )
             {
                 case State::idle:
-                    str += "NumWorker " + std::to_string( i ) + "  state idle\n";
+                    str += "[NumWorker " + std::to_string( i ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state idle\n";
+                    break;
+                case State::waitingName:
+                    str += "[NumWorker " + std::to_string( i ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state waitingName\n";
+                    break;
+                case State::waitingTask:
+                    str += "[NumWorker " + std::to_string( i ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state waitingTask\n";
                     break;
                 case State::initialize:
-                    str += "NumWorker " + std::to_string( i ) + "  state initialize\n";
+                    str += "[NumWorker " + std::to_string( i ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state initialize\n";
                     break;
                 case State::working:
-                    str += "NumWorker " + std::to_string( i ) + "  state working\n";
+                    str += "[NumWorker " + std::to_string( i ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state working\n";
                     break;
                 case State::failing:
-                    str += "NumWorker " + std::to_string( i ) + "  state failing\n";
+                    str += "[NumWorker " + std::to_string( i ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state failing\n";
                     break;
                 case State::shutdowning:
-                    str += "NumWorker " + std::to_string( i ) + "  state shutdowning\n";
+                    str += "[NumWorker " + std::to_string( i ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state shutdowning\n";
+                    break;
+                case State::readyToShutDown:
+                    str += "[NumWorker " + std::to_string( i ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state readyToShutDown\n";
                     break;
             }
             i++;
@@ -122,6 +159,9 @@ namespace ftcl
             statuses[ __numWorkers - 1 ].workerShutDownRequest = NetworkModule::Instance( ).send( __numWorkers, TypeMessage::MessageShutdownMasterToWorker );
             statuses[ __numWorkers - 1 ].timeCurrentState.start( );
             statuses[ __numWorkers - 1 ].sendedShutDown = true;
+
+            console::Log( ) << "master send shutdown";
+
         }
         else
         {
@@ -138,8 +178,38 @@ namespace ftcl
                 statuses[ __numWorkers - 1 ].sendedShutDown = false;
                 throw exception::Error_worker_shutDown( __FILE__, __LINE__ );
             }
+
+            if( NetworkModule::Instance( ).getError( ) )
+            {
+                auto proc = NetworkModule::Instance( ).getFailingProc( );
+                for( auto &elem : proc )
+                {
+                    statuses[ elem - 1 ] = _StatusWorker{ };
+                }
+                return false;
+            }
+
             return check;
         }
+        if( NetworkModule::Instance( ).getError( ) )
+        {
+            statuses[ __numWorkers - 1 ] = _StatusWorker{ };
+            return false;
+        }
         return false;
+    }
+
+    void StatusWorker::sendTask( std::size_t __numWorkers, const std::string &__str )
+    {
+        if( __numWorkers >= NetworkModule::Instance( ).getSize( ) )
+            throw exception::Illegal_rank( __FILE__, __LINE__ );
+        if( statuses[ __numWorkers - 1 ].state != State::waitingTask )
+            throw exception::Illegal_state_worker( __FILE__, __LINE__ );
+
+    }
+
+    bool StatusWorker::isInit( const std::size_t __numWorkers  )
+    {
+        return statuses[ __numWorkers - 1 ].isInit;
     }
 }

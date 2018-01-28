@@ -1,5 +1,4 @@
-cmake_minimum_required(VERSION 3.9)
-set(CMAKE_CXX_STANDARD 17)
+cmake_minimum_required(VERSION 3.4)
 set(
         HEADERS
         console/log.cpp
@@ -23,7 +22,7 @@ set(
         sheduler/status.hpp
         sheduler/status.cpp
         timer.hpp
-        message_manager.hpp message.hpp)
+        task/task.hpp)
 
 find_package(MPI)
 

@@ -11,198 +11,139 @@
 
 namespace ftcl
 {
+    //template< class Task >
     class ShedulerMaster : public Sheduler
     {
     protected:
         using NumWorker = std::size_t;
-
-        std::int64_t maxSecTime;
         StatusWorker statuses;
-        std::int64_t secWaitRequests{ 3 };
-        std::queue< std::tuple< NumWorker, Events > > events;
+
+        //std::queue< Task > tasks;
     public:
-        ShedulerMaster(
-                std::uint64_t __countWorkers,
-                std::int64_t __maxSecTime
+
+        //void setTasks( std::queue< Task > &&_tasks )
+        //{
+        //    tasks = _tasks;
+        //}
+
+
+        explicit ShedulerMaster(
             ) :
-                maxSecTime( __maxSecTime ),
-                statuses( __countWorkers )
+                statuses( NetworkModule::Instance( ).getSize( ) - 1 )
         {
             using namespace console;
             Log( ) << console::extensions::Level::Debug2
                    << "Create sheduler Master";
-            maxSecTime = __maxSecTime;
 
-            for( std::size_t i = 0; i < __countWorkers; i++ )
+            for( std::size_t i = 0; i < NetworkModule::Instance( ).getSize( ) - 1; i++ )
             {
                 events.push( std::make_tuple( i + 1, Events::GetInitializeWorker ) );
             }
+
+            func.emplace(
+                Events::GetInitializeWorker,
+                [ & ]( NumWorker numWorker )
+                {
+                    if( statuses.recvInitialize( numWorker ) )
+                    {
+                        Log( ) << "Worker " << numWorker << " initialized!";
+                        events.push( std::make_tuple( numWorker, Events::GetWorkersName ) );
+                    }
+
+                    if( !statuses.isInit( numWorker ) )
+                    {
+                        events.push( std::make_tuple( numWorker, Events::GetInitializeWorker ) );
+                    }
+                    else
+                    {
+                        statuses.printStatusWorkers( );
+                    }
+                } );
+
+
+            func.emplace(
+                Events::GetWorkersName,
+                [ & ]( NumWorker numWorker )
+                {
+                    if( !statuses.getWorkersName( numWorker ) )
+                        events.push( std::make_tuple( numWorker, Events::GetWorkersName ) );
+                    else
+                    {
+                        Log( ) << "Master recv worker name( "
+                               << statuses.getWorkerName( numWorker )
+                               << " )! NumWorker: "
+                               << numWorker;
+                        statuses.printStatusWorkers( );
+                        events.push( std::make_tuple( numWorker, Events::ShutDown ) );
+                    }
+                } );
+
+            func.emplace(
+                    Events::GetTask,
+                    [ & ]( NumWorker numWorker )
+                    {
+                        /*if( !tasks.empty( ) )
+                        {
+                            std::stringstream stream;
+                            stream << tasks.front( );
+
+                        }*/
+                    }
+                );
+
+
+            func.emplace(
+                Events::ShutDown,
+                [ & ]( NumWorker numWorker )
+                {
+                    if( !statuses.shutDown( numWorker ) )
+                    {
+                        events.push( std::make_tuple( numWorker, Events::ShutDown ) );
+                    }
+                    else
+                    {
+                        Log( ) << "Master recv worker shutdown( "
+                               << statuses.getWorkerName( numWorker )
+                               << " )! NumWorker: "
+                               << numWorker;
+                        statuses.countShutDownWorkers++;
+                        statuses.printStatusWorkers( );
+                    }
+                } );
         }
 
         void run( ) override
         {
             using namespace console;
-            bool init = false;
             while( !events.empty( ) )
             {
-                auto[ numWorker, event ] = events.front( );
-                switch( event )
-                {
-                    case Events::GetInitializeWorker:
-                    {
-                        try
-                        {
-                            if( statuses.recvInitialize( numWorker ) )
-                            {
-                                Log( ) << "Worker " << numWorker << " initialized!";
-                                events.push( std::make_tuple( numWorker, Events::GetWorkersName ) );
-                                init = true;
-                            }
-                        }
-                        catch( Exception &e )
-                        {
-                            Log( ) << e.what( );
-                        }
-
-                        if( !init )
-                        {
-                            events.push( std::make_tuple( numWorker, event ) );
-                        }
-                        else
-                        {
-                            statuses.printStatusWorkers( );
-                        }
-                        break;
-                    }
-                    case Events::GetWorkersName:
-                    {
-                        try
-                        {
-                            if( !statuses.getWorkersName( numWorker ) )
-                                events.push( std::make_tuple( numWorker, event ) );
-                            else
-                            {
-                                Log( ) << "Master recv worker name( "
-                                       << statuses.getWorkerName( numWorker )
-                                       << " )! NumWorker: "
-                                       << numWorker;
-                                events.push( std::make_tuple( numWorker, Events::ShutDown ) );
-                            }
-                        }
-                        catch( Exception &e )
-                        {
-                            Log( ) << e.what( );
-                        }
-                        break;
-                    }
-                    case Events::ShutDown:
-                    {
-                        try
-                        {
-                            if( !statuses.shutDown( numWorker ) )
-                            {
-                                events.push( std::make_tuple( numWorker, event ) );
-                            }
-                            else
-                            {
-                                Log( ) << "Master recv worker shutdown( "
-                                       << statuses.getWorkerName( numWorker )
-                                       << " )! NumWorker: "
-                                       << numWorker;
-                                statuses.countShutDownWorkers++;
-                            }
-                        }
-                        catch( Exception &e )
-                        {
-                            Log( ) << e.what( );
-                        }
-                        break;
-                    }
-                }
+                NumWorker numWorker;
+                Events event;
+                std::tie( numWorker, event ) = events.front( );
                 events.pop( );
+                try
+                {
+                    func[ event ]( numWorker );
+                }
+                catch( exception::Error_communication &ex )
+                {
+                    ex.what( );
+                    statuses.statuses[ numWorker ] = _StatusWorker{ };
+                    events.push( std::make_tuple( numWorker, Events::GetInitializeWorker ) );
+                }
+                catch( Exception &ex )
+                {
+                    ex.what( );
+                }
             }
 
-            if( statuses.countShutDownWorkers < NetworkModule::Instance().getSize( ) )
+
+            if( statuses.countShutDownWorkers < NetworkModule::Instance( ).getSize( ) - 1 )
             {
                 Log( ) << "ABORT!";
                 NetworkModule::Instance( ).abort( );
             }
         }
-
-        /*void initialize( ) override
-        {
-            std::uint64_t countInitializing = 0;
-            std::uint64_t numState = 0;
-
-            /// Отправка запроса на имена воркеров
-            while( numState < statuses.totalNumberWorkers )
-            {
-                console::Log( ) << console::extensions::Level::Debug2
-                                << "master send request to rank "
-                                << numState + 1;
-                statuses.statuses[ numState ].requestWorkerName = NetworkModule::Instance( ).send( numState + 1, TypeMessage::requestWorkersName );
-                numState++;
-            }
-
-            /// Ожидание ответа имен воркеров
-            numState = 0;
-            std::int64_t countWorkersReq = 0;
-            Timer timer;
-            timer.start( );
-            while( timer.end( ) < 3000 )
-            {
-                numState = 0;
-                while( numState < statuses.totalNumberWorkers )
-                {
-                    auto [ checkRequestName, requestName ] = 
-                        NetworkModule::Instance( ).checkMessage( 
-                                -1,
-                                TypeMessage::MessageWorkerName
-                            );
-                    if( checkRequestName )
-                    {
-                        auto msg = NetworkModule::Instance().getMessage( requestName );
-                        console::Log( ) << console::extensions::Level::Debug2
-                                        << "master recv worker name";
-                        countWorkersReq++;
-                    }
-                    numState++;
-                }
-                if( countWorkersReq == statuses.totalNumberWorkers )
-                {
-                    break;
-                }
-            }
-            console::Log( ) << console::extensions::Level::Debug2
-                            << "master success initialized";
-        }
-
-        void finalize( ) override
-        {
-            std::uint64_t numState = 0;
-            while( numState < statuses.totalNumberWorkers )
-            {
-                NetworkModule::Instance( ).send( numState + 1, TypeMessage::MessageShutdownMasterToWorker );
-                console::Log( ) << console::extensions::Level::Debug2
-                                << "Master send worker shutdown";
-                numState++;
-            }
-            numState = 0;
-            std::uint64_t countRecv = 0;
-            while( countRecv < statuses.totalNumberWorkers )
-            {
-                auto [ checkRequestShutdown, requestShutdown ] = NetworkModule::Instance( ).checkMessage( -1, TypeMessage::MessageShutdownWorkerToMaster );
-                if( checkRequestShutdown )
-                {
-                    auto msg = NetworkModule::Instance().getMessage( requestShutdown );
-                    console::Log( ) << console::extensions::Level::Debug2
-                                    << "Master recv shutdown";
-                    countRecv++;
-                }
-            }
-            console::Log( ) << console::extensions::Level::Debug2
-                            << "master success finalize";
-        }*/
     };
 }
 

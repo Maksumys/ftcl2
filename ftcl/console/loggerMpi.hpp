@@ -4,7 +4,6 @@
 
 #include "ftcl/console/loggerBase.hpp"
 #include "ftcl/console/logExtensions.hpp"
-#include "ftcl/message_manager.hpp"
 
 #include <mpi.h>
 

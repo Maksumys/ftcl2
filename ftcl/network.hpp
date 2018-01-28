@@ -32,7 +32,10 @@ namespace ftcl
         requestWorkersName,                 ///< сообщение запроса имени воркера
         MessageWorkerName,                  ///< сообщение имени воркера
         MessageShutdownMasterToWorker,      ///< сообщение команды завершения
-        MessageShutdownWorkerToMaster       ///< сообщение успешного завершения
+        MessageShutdownWorkerToMaster,      ///< сообщение успешного завершения
+        MessageReqTask,                     ///< сообщение запроса задачи
+        MessageTask,                        ///< сообщение задача
+        MessageTaskResponse                 ///< сообщение ответа задачи
     };
 
     /*!
@@ -61,8 +64,21 @@ namespace ftcl
         char**              gargv;
         MPI_Comm            world;
         MPI_Comm            rworld;
+
+        bool isReplace{ false };
+        std::vector< int > failingProc;
+
         NetworkModule( );
     public:
+        bool getError( )
+        {
+            bool test = isReplace;
+            isReplace = false;
+            return test;
+        }
+
+        std::vector< int > getFailingProc( );
+
         /*!
          * \brief Instance Инициализация модуля
          * \return Статический объект модуля
@@ -115,6 +131,12 @@ namespace ftcl
         send(
                 const Number        __toRank,
                 const TypeMessage   __typeMessage
+        );
+
+        MPI_Request
+        send(
+                const std::string &__data,
+                const Number __toRank
         );
 
         /*!
