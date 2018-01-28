@@ -125,12 +125,6 @@ namespace ftcl
                 {
                     func[ event ]( numWorker );
                 }
-                catch( exception::Error_communication &ex )
-                {
-                    ex.what( );
-                    statuses.statuses[ numWorker ] = _StatusWorker{ };
-                    events.push( std::make_tuple( numWorker, Events::GetInitializeWorker ) );
-                }
                 catch( Exception &ex )
                 {
                     ex.what( );
