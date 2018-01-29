@@ -11,22 +11,12 @@
 
 namespace ftcl
 {
-    //template< class Task >
     class ShedulerMaster : public Sheduler
     {
     protected:
         using NumWorker = std::size_t;
         StatusWorker statuses;
-
-        //std::queue< Task > tasks;
     public:
-
-        //void setTasks( std::queue< Task > &&_tasks )
-        //{
-        //    tasks = _tasks;
-        //}
-
-
         explicit ShedulerMaster(
             ) :
                 statuses( NetworkModule::Instance( ).getSize( ) - 1 )
@@ -46,7 +36,6 @@ namespace ftcl
                 {
                     if( statuses.recvInitialize( numWorker ) )
                     {
-                        Log( ) << "Worker " << numWorker << " initialized!";
                         events.push( std::make_tuple( numWorker, Events::GetWorkersName ) );
                     }
 
@@ -112,6 +101,43 @@ namespace ftcl
                 } );
         }
 
+        void repair( )
+        {
+            using namespace console;
+            auto failingProc = NetworkModule::Instance( ).getFailingProc( );
+
+            for( auto &proc : failingProc )
+            {
+                auto countEvents = events.size( );
+                for( std::size_t i = 0; i < countEvents; i++ )
+                {
+                    std::size_t numWorker;
+                    Events event;
+                    std::tie( numWorker, event ) = events.front( );
+                    if( numWorker > proc )
+                        events.emplace( numWorker - 1, event );
+                    else if( numWorker < proc )
+                        events.emplace( numWorker, event );
+                    events.pop( );
+                }
+
+                for( std::size_t i = 0; i < failingProc.size( ); i++ )
+                {
+                    events.emplace( NetworkModule::Instance( ).getSize( ) - i - 1, Events::GetInitializeWorker );
+                }
+
+                for( std::size_t i = proc; i < statuses.statuses.size( ); i++ )
+                {
+                    statuses.statuses[ i - 1 ] = statuses.statuses[ i ];
+                }
+            }
+
+            for( std::size_t i = 0; i < failingProc.size( ); i++ )
+            {
+                statuses.statuses[ statuses.statuses.size( ) - 1 - i ] = _StatusWorker{ };
+            }
+        }
+
         void run( ) override
         {
             using namespace console;
@@ -129,12 +155,20 @@ namespace ftcl
                 {
                     ex.what( );
                 }
+
+                if( NetworkModule::Instance( ).getError( ) )
+                {
+                    repair( );
+                    NetworkModule::Instance( ).resetError( );
+                }
             }
 
+            statuses.printStatusWorkers( );
 
             if( statuses.countShutDownWorkers < NetworkModule::Instance( ).getSize( ) - 1 )
             {
                 Log( ) << "ABORT!";
+                std::this_thread::sleep_for( std::chrono::seconds{ 5 } );
                 NetworkModule::Instance( ).abort( );
             }
         }

@@ -1,1 +1,0 @@
-/usr/bin/g++  -fPIC   -shared -Wl,-soname,libftcl.so -o libftcl.so CMakeFiles/ftcl.dir/console/log.cpp.o CMakeFiles/ftcl.dir/console/loggerBase.cpp.o CMakeFiles/ftcl.dir/console/loggerCommon.cpp.o CMakeFiles/ftcl.dir/console/loggerMpi.cpp.o CMakeFiles/ftcl.dir/sheduler/status.cpp.o CMakeFiles/ftcl.dir/network.cpp.o /usr/local/lib/libmpi.so 

@@ -72,9 +72,12 @@ namespace ftcl
     public:
         bool getError( )
         {
-            bool test = isReplace;
+            return isReplace;
+        }
+
+        void resetError( )
+        {
             isReplace = false;
-            return test;
         }
 
         std::vector< int > getFailingProc( );

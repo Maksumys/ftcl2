@@ -52,32 +52,58 @@ namespace ftcl
                 {
                     using namespace console;
 
+                    if( NetworkModule::Instance( ).getError( ) )
+                    {
+                        sendedWorkInit = false;
+                        if( reqWorkInit != MPI_REQUEST_NULL )
+                        {
+                            NetworkModule::Instance( ).cancel( reqWorkInit );
+                            MPI_Request_free( &reqWorkInit );
+                        }
+                        NetworkModule::Instance( ).resetError( );
+                    }
+
                     if( !sendedWorkInit )
                     {
                         timerWorkInit.start( );
                         reqWorkInit = NetworkModule::Instance( ).send( num, TypeMessage::WorkerInitialize );
                         sendedWorkInit = true;
-                    }
-
-                    NetworkModule::Status status;
-                    auto test = NetworkModule::Instance( ).test( reqWorkInit, status );
-                    if( test )
-                    {
-                        Log( ) << "worker sended initialize";
-                        events.emplace( 0, Events::GetWorkersName );
-                        return;
-                    }
-
-                    if( timerWorkInit.end( ) < timeWorkInit )
-                    {
                         events.push( std::make_tuple( num, Events::GetInitializeWorker ) );
                     }
                     else
                     {
-                        NetworkModule::Instance( ).cancel( reqWorkInit );
-                        sendedWorkInit = false;
-                        Log( ) << "Worker don't send init to master!";
+                        NetworkModule::Status status;
+                        auto test = NetworkModule::Instance( ).test( reqWorkInit, status );
+                        if( test )
+                        {
+                            if( status.MPI_SOURCE != -1 )
+                            {
+                                Log( ) << "worker sended initialize";
+                                events.emplace( 0, Events::GetWorkersName );
+                                return;
+                            }
+                            else
+                            {
+                                sendedWorkInit = false;
+                                NetworkModule::Instance( ).cancel( reqWorkInit );
+                                MPI_Request_free( &reqWorkInit );
+                                Log( ) << "Worker cancel! " << NetworkModule::Instance( ).getRank( );
+                            }
+                        }
+
+                        if( timerWorkInit.end( ) < timeWorkInit )
+                        {
+                            events.push( std::make_tuple( num, Events::GetInitializeWorker ) );
+                        }
+                        else
+                        {
+                            NetworkModule::Instance( ).cancel( reqWorkInit );
+                            MPI_Request_free( &reqWorkInit );
+                            sendedWorkInit = false;
+                            Log( ) << "Worker don't send init to master!";
+                        }
                     }
+
                 } );
 
             func.emplace(
@@ -109,7 +135,7 @@ namespace ftcl
                          auto test = NetworkModule::Instance( ).test( reqWorkName, status );
                          if( test )
                          {
-                             events.push( std::make_tuple( num, Events::GetTask ) );
+                             //events.push( std::make_tuple( num, Events::ShutDown ) );
                              return;
                          }
 

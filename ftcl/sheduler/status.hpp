@@ -34,6 +34,8 @@ namespace ftcl
         bool sendedShutDown{ false };
         Timer timeCurrentState;
         bool isInit{ false };
+
+
     };
 
     class StatusWorker

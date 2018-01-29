@@ -20,6 +20,7 @@ namespace ftcl
         bool check;
         NetworkModule::Status status;
         std::tie( check, status ) = NetworkModule::Instance( ).checkMessage( __numWorkers, TypeMessage::WorkerInitialize );
+
         if( check )
         {
             NetworkModule::Instance( ).getMessage( status );
@@ -28,17 +29,6 @@ namespace ftcl
             countInitializedWorkers++;
             statuses[ __numWorkers - 1 ].isInit = true;
         }
-
-        if( NetworkModule::Instance( ).getError( ) )
-        {
-            auto proc = NetworkModule::Instance( ).getFailingProc( );
-            for( auto &elem : proc )
-            {
-                statuses[ elem - 1 ] = _StatusWorker{ };
-            }
-            return false;
-        }
-
         return check;
     }
 
@@ -59,17 +49,26 @@ namespace ftcl
         if( statuses[ __numWorkers - 1 ].state == State::initialize )
         {
             statuses[ __numWorkers - 1 ].workerNameRequest = NetworkModule::Instance( ).send( __numWorkers, TypeMessage::MessageWorkerName );
+            if( NetworkModule::Instance( ).getError( ) )
+                return false;
+
             statuses[ __numWorkers - 1 ].timeCurrentState.start( );
             statuses[ __numWorkers - 1 ].state = State::waitingName;
-            console::Log( ) << "master send req to worker";
+            console::Log( ) << "master send req to worker" << __numWorkers - 1;
 
         }
         if( statuses[ __numWorkers - 1 ].state == State::waitingName )
         {
             auto[ check, status ] = NetworkModule::Instance( ).checkMessage( __numWorkers, TypeMessage::requestWorkersName );
+            if( NetworkModule::Instance( ).getError( ) )
+                return false;
+
             if( check )
             {
                 auto buf = NetworkModule::Instance( ).getMessage( status );
+                if( NetworkModule::Instance( ).getError( ) )
+                    return false;
+
                 statuses[ __numWorkers - 1 ].name = buf;
                 ///////// TODO! изменить потом на waitingTask
                 statuses[ __numWorkers - 1 ].state = State::readyToShutDown;
@@ -77,10 +76,16 @@ namespace ftcl
             if( statuses[ __numWorkers - 1 ].timeCurrentState.end( ) >= 7000 )
             {
                 NetworkModule::Instance( ).cancel( statuses[ __numWorkers - 1 ].workerNameRequest );
+                if( NetworkModule::Instance( ).getError( ) )
+                {
+                    std::cout << "get error in getWorkersName" << std::endl;
+                    return false;
+                }
+
                 statuses[ __numWorkers - 1 ].state = State::failing;
             }
 
-            if( NetworkModule::Instance( ).getError( ) )
+            /*if( NetworkModule::Instance( ).getError( ) )
             {
                 auto proc = NetworkModule::Instance( ).getFailingProc( );
                 for( auto &elem : proc )
@@ -88,7 +93,7 @@ namespace ftcl
                     statuses[ elem - 1 ] = _StatusWorker{ };
                 }
                 return false;
-            }
+            }*/
 
             return check;
         }
@@ -113,28 +118,28 @@ namespace ftcl
             switch( elem.state )
             {
                 case State::idle:
-                    str += "[NumWorker " + std::to_string( i ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state idle\n";
+                    str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state idle\n";
                     break;
                 case State::waitingName:
-                    str += "[NumWorker " + std::to_string( i ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state waitingName\n";
+                    str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state waitingName\n";
                     break;
                 case State::waitingTask:
-                    str += "[NumWorker " + std::to_string( i ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state waitingTask\n";
+                    str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state waitingTask\n";
                     break;
                 case State::initialize:
-                    str += "[NumWorker " + std::to_string( i ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state initialize\n";
+                    str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state initialize\n";
                     break;
                 case State::working:
-                    str += "[NumWorker " + std::to_string( i ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state working\n";
+                    str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state working\n";
                     break;
                 case State::failing:
-                    str += "[NumWorker " + std::to_string( i ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state failing\n";
+                    str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state failing\n";
                     break;
                 case State::shutdowning:
-                    str += "[NumWorker " + std::to_string( i ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state shutdowning\n";
+                    str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state shutdowning\n";
                     break;
                 case State::readyToShutDown:
-                    str += "[NumWorker " + std::to_string( i ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state readyToShutDown\n";
+                    str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state readyToShutDown\n";
                     break;
             }
             i++;
@@ -157,6 +162,9 @@ namespace ftcl
         if( !statuses[ __numWorkers - 1 ].sendedShutDown )
         {
             statuses[ __numWorkers - 1 ].workerShutDownRequest = NetworkModule::Instance( ).send( __numWorkers, TypeMessage::MessageShutdownMasterToWorker );
+            if( NetworkModule::Instance( ).getError( ) )
+                return false;
+
             statuses[ __numWorkers - 1 ].timeCurrentState.start( );
             statuses[ __numWorkers - 1 ].sendedShutDown = true;
 
@@ -166,6 +174,9 @@ namespace ftcl
         else
         {
             auto[ check, status ] = NetworkModule::Instance( ).checkMessage( __numWorkers, TypeMessage::MessageShutdownWorkerToMaster );
+            if( NetworkModule::Instance( ).getError( ) )
+                return false;
+
             if( check )
             {
                 NetworkModule::Instance( ).getMessage( status );
@@ -174,27 +185,14 @@ namespace ftcl
             if( statuses[ __numWorkers - 1 ].timeCurrentState.end( ) >= 3000 )
             {
                 NetworkModule::Instance( ).cancel( statuses[ __numWorkers - 1 ].workerShutDownRequest );
+                if( NetworkModule::Instance( ).getError( ) )
+                    return false;
+
                 statuses[ __numWorkers - 1 ].state = State::failing;
                 statuses[ __numWorkers - 1 ].sendedShutDown = false;
                 throw exception::Error_worker_shutDown( __FILE__, __LINE__ );
             }
-
-            if( NetworkModule::Instance( ).getError( ) )
-            {
-                auto proc = NetworkModule::Instance( ).getFailingProc( );
-                for( auto &elem : proc )
-                {
-                    statuses[ elem - 1 ] = _StatusWorker{ };
-                }
-                return false;
-            }
-
             return check;
-        }
-        if( NetworkModule::Instance( ).getError( ) )
-        {
-            statuses[ __numWorkers - 1 ] = _StatusWorker{ };
-            return false;
         }
         return false;
     }
