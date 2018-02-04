@@ -4,15 +4,33 @@
 
 namespace ftcl
 {
-    NetworkModule::NetworkModule( )
-    {
-    }
+    NetworkModule::NetworkModule( ) = default;
 
-    MPI_Comm NetworkModule::getParentComm( )
+
+    void print_comm_ranks(MPI_Comm test_comm)
     {
-        MPI_Comm bufcomm;
-        MPI_Comm_get_parent( &bufcomm );
-        return bufcomm;
+        MPI_Group grp, world_grp;
+
+        MPI_Comm_group(MPI_COMM_WORLD, &world_grp);
+        MPI_Comm_group(test_comm, &grp);
+
+        int grp_size;
+
+        MPI_Group_size(grp, &grp_size);
+
+        std::vector< int > ranks( grp_size );
+        std::vector< int > world_ranks( grp_size );
+
+        for (int i = 0; i < grp_size; i++)
+            ranks[i] = i;
+
+        MPI_Group_translate_ranks(grp, grp_size, ranks.data( ), world_grp, world_ranks.data( ) );
+
+        for (int i = 0; i < grp_size; i++)
+            printf("comm[%d] has world rank %d\n", i, world_ranks[i]);
+
+        MPI_Group_free(&grp);
+        MPI_Group_free(&world_grp);
     }
 
     void NetworkModule::initialize( int argc, char **argv )
@@ -36,6 +54,10 @@ namespace ftcl
                 MPI_Get_processor_name( __name, &length );
                 name = __name;
 
+
+                /// заполнение таблицы виртуальных номеров процессов
+                for( std::size_t i = 0; i < size; i++ )
+                    virtual_ranks.emplace( i, i );
             }
             else
             {
@@ -51,7 +73,7 @@ namespace ftcl
         }
     }
 
-    void NetworkModule::Spawn( )
+    void NetworkModule::spawn( )
     {
         MPI_Comm bufWorld;
         MPIX_Comm_replace( world, &bufWorld );
@@ -60,7 +82,7 @@ namespace ftcl
         isReplace = true;
     }
 
-    std::vector< int > NetworkModule::getFailingProc( )
+    std::vector< std::size_t > NetworkModule::getFailingProc( )
     {
         return failingProc;
     }
@@ -68,11 +90,11 @@ namespace ftcl
     int NetworkModule::MPIX_Comm_replace( MPI_Comm comm, MPI_Comm *newcomm )
     {
         int oldrank = rank;
-
-        std::cout << "MPIX REPLACE: " << rank << std::endl;
         MPI_Comm icomm; // коммуникатор после очищение но до добавления процессов
         MPI_Comm scomm; // локальный коммуникатор для каждой стороны icomm???восстановленных
         MPI_Comm mcomm; // интракомм слияние
+
+        std::string str;
 
         if( comm == MPI_COMM_NULL )
         {
@@ -81,6 +103,7 @@ namespace ftcl
         }
         else
         {
+            console::Log( ) << console::extensions::Level::Error << "Detected failed process";
             MPIX_Comm_failure_ack( comm );
             MPI_Group group_f;
             MPIX_Comm_failure_get_acked( comm, &group_f );
@@ -99,16 +122,33 @@ namespace ftcl
             }
             MPI_Group_translate_ranks( group_f, nf, ranks_gf.data( ), group_c, ranks_gc.data( ) );
 
-            std::cout << "FAILED RANKS ";
+            str += "\n\nFAILED RANKS ";
+
             for( int i = 0; i < nf; i++ )
             {
-                std::cout << "  " << ranks_gc[ i ] << " ";
+                str += std::string{ "  " } + std::to_string( ranks_gc[ i ] ) + std::string{ " " };
             }
-            std::cout << std::endl;
+            str += "\n";
 
-            failingProc = ranks_gc;
+            failingProc.resize( ranks_gc.size() );
+            std::copy( ranks_gc.begin(), ranks_gc.end(), failingProc.begin() );
+
+
+            /// 0 1 *2* 3 4 5
+            /// 0 1  3  4 5 2
+
+            for( auto &proc : failingProc )
+            {
+                for( std::size_t i = proc; i < virtual_ranks.size( ) - 1; i++ )
+                    virtual_ranks[ i ] = virtual_ranks[ i + 1 ];
+
+            }
+
+
+
 
             MPIX_Comm_shrink( comm, &scomm );
+
             int ns;
             int nc;
             MPI_Comm_size( scomm, &ns );
@@ -131,6 +171,7 @@ namespace ftcl
                     &icomm,
                     MPI_ERRCODES_IGNORE
                 );
+
             int flag = ( MPI_SUCCESS == rc );
             MPIX_Comm_agree( scomm, &flag );
             if( !flag )
@@ -141,7 +182,7 @@ namespace ftcl
                     MPI_Comm_free( &icomm );
                 }
                 MPI_Comm_free( &scomm );
-                std::cout << rank << ": comm_spawn failed" << std::endl;
+                console::Log( ) << rank << ": comm_spawn failed";
                 return -1;
             }
         }
@@ -158,7 +199,7 @@ namespace ftcl
         {
             if( rc == MPI_SUCCESS )
                 MPI_Comm_free( &mcomm );
-            std::cout << rank << ": Intercomm_merge failed" << std::endl;
+            console::Log( ) << rank << ": Intercomm_merge failed";
             return -1;
         }
 
@@ -171,7 +212,8 @@ namespace ftcl
         }
         *newcomm = mcomm;
         MPI_Comm_rank( mcomm, &rank );
-        std::cout << "MY OLD RANK = " << oldrank << " newRank = " << rank << std::endl;
+        str += "old rank = " + std::to_string( oldrank ) + " newRank = " + std::to_string( rank ) + "\n";
+        console::Log( ) << console::extensions::Level::Error <<  str;
         return MPI_SUCCESS;
     }
 
@@ -224,8 +266,7 @@ namespace ftcl
                 );
             if( rc != MPI_SUCCESS )
             {
-                std::cout << "IN send replace" << std::endl;
-                Spawn( );
+                spawn( );
             }
             else
                 break;
@@ -239,7 +280,6 @@ namespace ftcl
             const Number __toRank
         )
     {
-        std::cout << "IN send " << std::endl;
         if( __toRank == rank )
             throw exception::Attempt_to_send_to_oneself( __FILE__, __LINE__ );
         MPI_Request request;
@@ -257,8 +297,7 @@ namespace ftcl
                                );
             if( rc != MPI_SUCCESS )
             {
-                std::cout << "IN send replace" << std::endl;
-                Spawn( );
+                spawn( );
             }
             else
                 break;
@@ -293,8 +332,7 @@ namespace ftcl
                 );
             if( rc != MPI_SUCCESS )
             {
-                Spawn( );
-                std::cout << "IN get message replace" << std::endl;
+                spawn( );
             }
             else
                 break;
@@ -312,8 +350,7 @@ namespace ftcl
             rc = MPI_Test( &request, &testVar, &status );
             if( rc != MPI_SUCCESS )
             {
-                std::cout << "IN test message replace" << std::endl;
-                Spawn( );
+                spawn( );
             }
             else
                 break;
@@ -334,7 +371,7 @@ namespace ftcl
             std::unique_lock< std::mutex > guard( mutex );
             auto rc = MPI_Cancel( &request );
             if( rc != MPI_SUCCESS )
-                Spawn( );
+                spawn( );
             else
                 break;
         }
@@ -363,8 +400,7 @@ namespace ftcl
                                );
             if( rc != MPI_SUCCESS )
             {
-                std::cout << "IN check message replace" << std::endl;
-                Spawn( );
+                spawn( );
             }
             else
                 break;
@@ -402,8 +438,7 @@ namespace ftcl
                     );
             if( rc != MPI_SUCCESS )
             {
-                std::cout << "IN check message replace " << source << std::endl;
-                Spawn( );
+                spawn( );
             }
             else
                 break;
@@ -417,7 +452,7 @@ namespace ftcl
         MPI_Finalize( );
     }
 
-    MPI_Request NetworkModule::send(const Number __toRank, const TypeMessage __typeMessage)
+    MPI_Request NetworkModule::send( const Number __toRank, const TypeMessage __typeMessage )
     {
         if( __toRank >= size  )
             throw exception::Illegal_rank( __FILE__, __LINE__ );
@@ -436,7 +471,7 @@ namespace ftcl
                     &request
             );
             if( rc != MPI_SUCCESS )
-                Spawn( );
+                spawn( );
             else
                 break;
         }
@@ -457,7 +492,7 @@ namespace ftcl
             int testVar;
             auto rc = MPI_Test( &request, &testVar, &status );
             if( rc != MPI_SUCCESS )
-                Spawn( );
+                spawn( );
             else
                 break;
 
@@ -471,11 +506,27 @@ namespace ftcl
                 std::this_thread::sleep_for( std::chrono::microseconds( 10 ) );
                 auto rc = MPI_Cancel( &request );
                 if( rc != MPI_SUCCESS )
-                    Spawn( );
+                    spawn( );
                 throw exception::Error_worker_logger( __FILE__, __LINE__ );
             }
         }
     }
+
+    bool NetworkModule::getError( )
+    {
+        return isReplace;
+    }
+
+    void NetworkModule::resetError( )
+    {
+        isReplace = false;
+    }
+
+    void NetworkModule::Abort( )
+    {
+        MPI_Abort( world, 10 );
+    }
+
 }
 
 

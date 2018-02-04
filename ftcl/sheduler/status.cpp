@@ -59,7 +59,9 @@ namespace ftcl
         }
         if( statuses[ __numWorkers - 1 ].state == State::waitingName )
         {
-            auto[ check, status ] = NetworkModule::Instance( ).checkMessage( __numWorkers, TypeMessage::requestWorkersName );
+            bool check;
+            NetworkModule::Status status;
+            std::tie( check, status ) = NetworkModule::Instance( ).checkMessage( __numWorkers, TypeMessage::requestWorkersName );
             if( NetworkModule::Instance( ).getError( ) )
                 return false;
 
@@ -173,7 +175,9 @@ namespace ftcl
         }
         else
         {
-            auto[ check, status ] = NetworkModule::Instance( ).checkMessage( __numWorkers, TypeMessage::MessageShutdownWorkerToMaster );
+            bool check;
+            NetworkModule::Status status;
+            std::tie( check, status ) = NetworkModule::Instance( ).checkMessage( __numWorkers, TypeMessage::MessageShutdownWorkerToMaster );
             if( NetworkModule::Instance( ).getError( ) )
                 return false;
 
@@ -185,9 +189,6 @@ namespace ftcl
             if( statuses[ __numWorkers - 1 ].timeCurrentState.end( ) >= 3000 )
             {
                 NetworkModule::Instance( ).cancel( statuses[ __numWorkers - 1 ].workerShutDownRequest );
-                if( NetworkModule::Instance( ).getError( ) )
-                    return false;
-
                 statuses[ __numWorkers - 1 ].state = State::failing;
                 statuses[ __numWorkers - 1 ].sendedShutDown = false;
                 throw exception::Error_worker_shutDown( __FILE__, __LINE__ );
@@ -199,15 +200,37 @@ namespace ftcl
 
     void StatusWorker::sendTask( std::size_t __numWorkers, const std::string &__str )
     {
-        if( __numWorkers >= NetworkModule::Instance( ).getSize( ) )
-            throw exception::Illegal_rank( __FILE__, __LINE__ );
-        if( statuses[ __numWorkers - 1 ].state != State::waitingTask )
-            throw exception::Illegal_state_worker( __FILE__, __LINE__ );
-
     }
 
     bool StatusWorker::isInit( const std::size_t __numWorkers  )
     {
         return statuses[ __numWorkers - 1 ].isInit;
+    }
+
+    template< typename _TypeTask >
+    void StatusWorker::getTask( std::size_t __numWorkers, _TypeTask &task )
+    {
+        if( __numWorkers >= NetworkModule::Instance( ).getSize( ) )
+            throw exception::Illegal_rank( __FILE__, __LINE__ );
+        if( ( statuses[ __numWorkers - 1 ].state != State::waitingReqTask ) &&
+            ( statuses[ __numWorkers - 1 ].state != State::waitingTask ) )
+            throw exception::Illegal_state_worker( __FILE__, __LINE__ );
+
+
+        if( statuses[ __numWorkers - 1 ].state == State::waitingReqTask )
+        {
+            bool check;
+            NetworkModule::Status status;
+            std::tie( check, status ) = NetworkModule::Instance( ).checkMessage( __numWorkers, TypeMessage::MessageReqTask );
+            if( check )
+            {
+                NetworkModule::Instance( ).getMessage( status );
+                statuses[ __numWorkers - 1 ].state = State::waitingTask;
+            }
+        }
+        else if( statuses[ __numWorkers - 1 ].state == State::waitingTask )
+        {
+            /// отправление задачи ( входных параметров для задачи )
+        }
     }
 }

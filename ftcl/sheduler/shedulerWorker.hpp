@@ -35,6 +35,8 @@ namespace ftcl
         bool sendedShutDown{ false };
 
         bool sendedReqTask{ false };
+        NetworkModule::Request reqSendedReqTask;
+        Timer timerReqTask;
 
         std::size_t timeWorkInit{ 10000 };
 
@@ -43,6 +45,7 @@ namespace ftcl
         {
             console::Log( ) << console::extensions::Level::Debug2
                             << "Create sheduler Worker";
+
             events.emplace( 0, Events::GetInitializeWorker );
             events.emplace( 0, Events::ShutDown );
 
@@ -55,11 +58,7 @@ namespace ftcl
                     if( NetworkModule::Instance( ).getError( ) )
                     {
                         sendedWorkInit = false;
-                        if( reqWorkInit != MPI_REQUEST_NULL )
-                        {
-                            NetworkModule::Instance( ).cancel( reqWorkInit );
-                            MPI_Request_free( &reqWorkInit );
-                        }
+                        NetworkModule::Instance( ).cancel( reqWorkInit );
                         NetworkModule::Instance( ).resetError( );
                     }
 
@@ -68,7 +67,7 @@ namespace ftcl
                         timerWorkInit.start( );
                         reqWorkInit = NetworkModule::Instance( ).send( num, TypeMessage::WorkerInitialize );
                         sendedWorkInit = true;
-                        events.push( std::make_tuple( num, Events::GetInitializeWorker ) );
+                        events.emplace( num, Events::GetInitializeWorker );
                     }
                     else
                     {
@@ -86,19 +85,15 @@ namespace ftcl
                             {
                                 sendedWorkInit = false;
                                 NetworkModule::Instance( ).cancel( reqWorkInit );
-                                MPI_Request_free( &reqWorkInit );
                                 Log( ) << "Worker cancel! " << NetworkModule::Instance( ).getRank( );
                             }
                         }
 
                         if( timerWorkInit.end( ) < timeWorkInit )
-                        {
-                            events.push( std::make_tuple( num, Events::GetInitializeWorker ) );
-                        }
+                            events.emplace( num, Events::GetInitializeWorker );
                         else
                         {
                             NetworkModule::Instance( ).cancel( reqWorkInit );
-                            MPI_Request_free( &reqWorkInit );
                             sendedWorkInit = false;
                             Log( ) << "Worker don't send init to master!";
                         }
@@ -127,7 +122,7 @@ namespace ftcl
                                   );
                               sendedWorkName = true;
                          }
-                         events.push( std::make_tuple( num, Events::GetWorkersName ) );
+                         events.emplace( num, Events::GetWorkersName );
                      }
                      else
                      {
@@ -135,12 +130,12 @@ namespace ftcl
                          auto test = NetworkModule::Instance( ).test( reqWorkName, status );
                          if( test )
                          {
-                             //events.push( std::make_tuple( num, Events::ShutDown ) );
+                             events.push( std::make_tuple( num, Events::GetReqTask ) );
                              return;
                          }
 
                          if( timerWorkName.end( ) < timeWorkInit )
-                             events.push( std::make_tuple( num, Events::GetWorkersName ) );
+                             events.emplace( num, Events::GetWorkersName );
                          else
                          {
                              NetworkModule::Instance( ).cancel( reqWorkName );
@@ -151,17 +146,56 @@ namespace ftcl
                  } );
 
             func.emplace(
-                        Events::GetTask,
-                        [ & ]( NumWorker num )
+                Events::GetReqTask,
+                [ & ]( NumWorker num )
+                {
+                    /// если запрос на задачу еще не был послан
+                    if( !sendedReqTask )
+                    {
+                        /// посылаем запрос на задачу
+                        reqSendedReqTask = NetworkModule::Instance( ).send( 0, TypeMessage::MessageReqTask );
+                        timerReqTask.start( );
+                        sendedReqTask = true;
+                        events.emplace( num, Events::GetReqTask );
+                    }
+                    else
+                    {
+                        if( timerReqTask.end( ) < timeWorkInit )
                         {
-                            if( !sendedReqTask )
+                            NetworkModule::Status status;
+                            auto test = NetworkModule::Instance( ).test( reqSendedReqTask, status );
+                            if( test )
                             {
-                                bool check;
-                                NetworkModule::Status status;
-                                std::tie( check, status ) = NetworkModule::Instance( ).checkMessage( 0, TypeMessage::MessageTaskResponse );
+                                events.emplace( num, Events::GetTask );
+                                return;
+                            }
+                            else
+                            {
+                                events.emplace( num, Events::GetReqTask );
                             }
                         }
-                        );
+                        else
+                        {
+                            NetworkModule::Instance( ).cancel( reqSendedReqTask );
+                            sendedReqTask = false;
+                            events.emplace( num, Events::GetReqTask );
+                            console::Log( ) << "Doesn't send \"MessageReqTask\"";
+                        }
+                    }
+                } );
+
+            func.emplace(
+                    Events::GetTask,
+                    [ & ]( NumWorker num )
+                    {
+                        bool check;
+                        NetworkModule::Status status;
+                        std::tie( check, status ) = NetworkModule::Instance( ).checkMessage( 0, TypeMessage::MessageTask );
+                        if( check )
+                        {
+                            
+                        }
+                    } );
 
 
             func.emplace(
@@ -174,10 +208,11 @@ namespace ftcl
                     {
                         bool check;
                         NetworkModule::Status status;
-                        std::tie( check, status ) = NetworkModule::Instance( ).checkMessage( 0,
-                                                                                             TypeMessage::MessageShutdownMasterToWorker
-                                                                                           );
-                        if ( check )
+                        std::tie( check, status ) = NetworkModule::Instance( ).checkMessage(
+                                0,
+                                TypeMessage::MessageShutdownMasterToWorker
+                            );
+                        if( check )
                         {
                             NetworkModule::Instance( ).getMessage( status );
                             Log( ) << "Worker recv shutdown";
@@ -188,22 +223,20 @@ namespace ftcl
                                     NetworkModule::Instance( ).getName( ),
                                     0,
                                     TypeMessage::MessageShutdownWorkerToMaster
-                                                                         );
+                                );
                             sendedShutDown = true;
                         }
-                        events.push( std::make_tuple( num, Events::ShutDown ) );
+                        events.emplace( num, Events::ShutDown );
                     }
                     else
                     {
                         NetworkModule::Status status;
                         auto test = NetworkModule::Instance( ).test( reqShutDown, status );
                         if( test )
-                        {
                             return;
-                        }
 
                         if( timerWorkName.end( ) < timeWorkInit )
-                            events.push( std::make_tuple( num, Events::ShutDown ) );
+                            events.emplace( num, Events::ShutDown );
                         else
                         {
                             NetworkModule::Instance( ).cancel( reqShutDown );

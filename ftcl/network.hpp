@@ -56,31 +56,25 @@ namespace ftcl
         using Request = MPI_Request;
         using Status = MPI_Status;
     protected:
-        Number              rank;                       ///< номер текущего процесса
-        Number              size;                       ///< общее количество процессов
-        std::string         name;                       ///< имя узла на котором запущен процесс
-        mutable std::mutex  mutex;                      ///< синхронизация вызовов функций
-        int                 empty = 0;                  ///< костыль для пустого сообщения
-        char**              gargv;
-        MPI_Comm            world;
-        MPI_Comm            rworld;
+        Number                                  rank;                       ///< номер текущего процесса
+        Number                                  size;                       ///< общее количество процессов
+        std::string                             name;                       ///< имя узла на котором запущен процесс
+        mutable std::mutex                      mutex;                      ///< синхронизация вызовов функций
+        int                                     empty = 0;                  ///< костыль для пустого сообщения
+        char**                                  gargv;                      ///< аргументы командной строки
+        MPI_Comm                                world;                      ///< текущий коммуникатор
+        MPI_Comm                                rworld;                     ///< коммуникатор для замены в случае отказа
 
-        bool isReplace{ false };
-        std::vector< int > failingProc;
+        std::map< std::size_t, std::size_t >    virtual_ranks;              ///< таблица виртуальных номер процессов
+
+        bool isReplace{ false };                                            ///< признак отказа процессов
+        std::vector< std::size_t >              failingProc;                ///< номера отказавших процессов
 
         NetworkModule( );
     public:
-        bool getError( )
-        {
-            return isReplace;
-        }
-
-        void resetError( )
-        {
-            isReplace = false;
-        }
-
-        std::vector< int > getFailingProc( );
+        bool getError( );
+        void resetError( );
+        std::vector< std::size_t > getFailingProc( );
 
         /*!
          * \brief Instance Инициализация модуля
@@ -88,10 +82,10 @@ namespace ftcl
          */
         static NetworkModule& Instance( );
 
-        void Spawn( );
+        void spawn( );
         void initialize( int argc, char **argv );
-
         int MPIX_Comm_replace( MPI_Comm comm, MPI_Comm *newcomm );
+
         /*!
          * \brief getSize Возвращает количество процессов
          * \return Кол-во процессов
@@ -176,11 +170,7 @@ namespace ftcl
         void abort( );
 
         void wait( MPI_Request &request, MPI_Status &status, const std::int64_t sec );
-        MPI_Comm getParentComm( );
-        void Abort( )
-        {
-            MPI_Abort( world, 10 );
-        }
+        void Abort( );
     private:
         ~NetworkModule( );
     };

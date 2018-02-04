@@ -17,6 +17,7 @@ namespace ftcl
         idle = 0,
         initialize,
         waitingName,
+        waitingReqTask,
         waitingTask,
         working,
         failing,
@@ -59,6 +60,9 @@ namespace ftcl
         std::string getWorkerName( std::size_t numWorker );
         bool isInit( std::size_t __numWorkers  );
         void sendTask( std::size_t numWorker, const std::string &str );
+
+        template< typename _TypeTask >
+        void getTask( std::size_t numWorker, _TypeTask &task );
     };
 
 }

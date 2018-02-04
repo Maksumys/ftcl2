@@ -11,11 +11,13 @@
 
 namespace ftcl
 {
+    template< typename _TypeTask >
     class ShedulerMaster : public Sheduler
     {
     protected:
         using NumWorker = std::size_t;
-        StatusWorker statuses;
+        StatusWorker                        statuses;           ///< статусы воркеров и действия над ними
+        std::queue< _TypeTask >             tasks;              ///< очередь задач
     public:
         explicit ShedulerMaster(
             ) :
@@ -26,27 +28,19 @@ namespace ftcl
                    << "Create sheduler Master";
 
             for( std::size_t i = 0; i < NetworkModule::Instance( ).getSize( ) - 1; i++ )
-            {
-                events.push( std::make_tuple( i + 1, Events::GetInitializeWorker ) );
-            }
+                events.emplace( i + 1, Events::GetInitializeWorker );
 
             func.emplace(
                 Events::GetInitializeWorker,
                 [ & ]( NumWorker numWorker )
                 {
                     if( statuses.recvInitialize( numWorker ) )
-                    {
-                        events.push( std::make_tuple( numWorker, Events::GetWorkersName ) );
-                    }
+                        events.emplace( numWorker, Events::GetWorkersName );
 
                     if( !statuses.isInit( numWorker ) )
-                    {
-                        events.push( std::make_tuple( numWorker, Events::GetInitializeWorker ) );
-                    }
+                        events.emplace( numWorker, Events::GetInitializeWorker );
                     else
-                    {
                         statuses.printStatusWorkers( );
-                    }
                 } );
 
 
@@ -55,7 +49,7 @@ namespace ftcl
                 [ & ]( NumWorker numWorker )
                 {
                     if( !statuses.getWorkersName( numWorker ) )
-                        events.push( std::make_tuple( numWorker, Events::GetWorkersName ) );
+                        events.emplace( numWorker, Events::GetWorkersName );
                     else
                     {
                         Log( ) << "Master recv worker name( "
@@ -63,7 +57,7 @@ namespace ftcl
                                << " )! NumWorker: "
                                << numWorker;
                         statuses.printStatusWorkers( );
-                        events.push( std::make_tuple( numWorker, Events::ShutDown ) );
+                        events.emplace( numWorker, Events::GetTask );
                     }
                 } );
 
@@ -71,12 +65,10 @@ namespace ftcl
                     Events::GetTask,
                     [ & ]( NumWorker numWorker )
                     {
-                        /*if( !tasks.empty( ) )
+                        if( !tasks.empty( ) )
                         {
-                            std::stringstream stream;
-                            stream << tasks.front( );
-
-                        }*/
+                            statuses.getTask( numWorker, tasks.front( ) );
+                        }
                     }
                 );
 
@@ -86,9 +78,7 @@ namespace ftcl
                 [ & ]( NumWorker numWorker )
                 {
                     if( !statuses.shutDown( numWorker ) )
-                    {
-                        events.push( std::make_tuple( numWorker, Events::ShutDown ) );
-                    }
+                        events.emplace( numWorker, Events::ShutDown );
                     else
                     {
                         Log( ) << "Master recv worker shutdown( "
@@ -122,14 +112,10 @@ namespace ftcl
                 }
 
                 for( std::size_t i = 0; i < failingProc.size( ); i++ )
-                {
                     events.emplace( NetworkModule::Instance( ).getSize( ) - i - 1, Events::GetInitializeWorker );
-                }
 
                 for( std::size_t i = proc; i < statuses.statuses.size( ); i++ )
-                {
                     statuses.statuses[ i - 1 ] = statuses.statuses[ i ];
-                }
             }
 
             for( std::size_t i = 0; i < failingProc.size( ); i++ )
