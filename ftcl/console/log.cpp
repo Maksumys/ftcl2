@@ -20,6 +20,7 @@ namespace ftcl::console
     Log& Log::operator<<( unsigned long long int value ) { msg.stream += std::to_string( value ); return *this; }
     Log& Log::operator<<( float value ) { msg.stream += std::to_string( value ); return *this; }
     Log& Log::operator<<( double value ) { msg.stream += std::to_string( value ); return *this; }
+    Log& Log::operator<<( long double value ) { std::stringstream ss; ss << std::setprecision( 40 ) << value;  msg.stream += ss.str( ); return *this; }
     Log& Log::operator<<( const std::string &value ) { msg.stream += value; return *this; }
 
     Log::~Log( )

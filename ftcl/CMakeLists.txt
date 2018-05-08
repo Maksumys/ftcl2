@@ -22,7 +22,11 @@ set(
         sheduler/status.hpp
         sheduler/status.cpp
         timer.hpp
-        task/task.hpp)
+        task/task.hpp
+        gui_server.cpp
+        gui_server.hpp
+        checkpoint.hpp
+        )
 
 find_package(MPI)
 
@@ -30,7 +34,7 @@ set(
         FTCL_COMPILE_OPTIONS
         -Wall
         -Wextra
-        -g
+        -g3
         -std=c++17
     )
 
@@ -53,13 +57,16 @@ if(MPI_CXX_FOUND)
     set(NETWORK_ON)
 endif()
 
+find_package(Boost 1.66.0 COMPONENTS system)
+
 add_library(${PROJECT_NAME} SHARED ${HEADERS})
-target_link_libraries(${PROJECT_NAME} PUBLIC ${FTCL_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} PUBLIC ${FTCL_LIBRARIES} ${Boost_LIBRARIES} )
 target_include_directories(
         ${PROJECT_NAME}
         PUBLIC
         ${CMAKE_SOURCE_DIR}
         ${MPI_CXX_INCLUDE_PATH}
+        ${Boost_INCLUDE_DIRS}
 )
 target_compile_options(${PROJECT_NAME} PUBLIC ${FTCL_COMPILE_OPTIONS})
 target_compile_definitions(${PROJECT_NAME} PUBLIC ${FTCL_DEFINITION})

@@ -29,6 +29,7 @@ namespace ftcl::console
         Log& operator<<( unsigned long long int __value );
         Log& operator<<( float __value );
         Log& operator<<( double __value );
+        Log& operator<<( long double __value );
         Log& operator<<( const std::string &__value );
 
         Log& operator<<( const extensions::Level &__level );

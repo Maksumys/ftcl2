@@ -35,12 +35,13 @@ namespace ftcl
         MessageShutdownWorkerToMaster,      ///< сообщение успешного завершения
         MessageReqTask,                     ///< сообщение запроса задачи
         MessageTask,                        ///< сообщение задача
-        MessageTaskResponse                 ///< сообщение ответа задачи
+        MessageTaskResponse,                ///< сообщение ответа задачи
+        MessageShutDownForce,
     };
 
     /*!
-     * \brief The NetworkModule class Модуль коммуникаций между узлами
-     * \code
+     * @brief The NetworkModule class Модуль коммуникаций между узлами
+     * @code
      * //Пример инициализации:
      * NetworkModule::Instance( );
      *
@@ -67,7 +68,7 @@ namespace ftcl
 
         std::map< std::size_t, std::size_t >    virtual_ranks;              ///< таблица виртуальных номер процессов
 
-        bool isReplace{ false };                                            ///< признак отказа процессов
+        bool                                    isReplace{ false };         ///< признак отказа процессов
         std::vector< std::size_t >              failingProc;                ///< номера отказавших процессов
 
         NetworkModule( );

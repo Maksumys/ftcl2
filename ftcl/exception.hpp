@@ -181,6 +181,18 @@ namespace ftcl
                     __lineEx
                          ) { }
         };
+
+        class Error_send_time_message : public Exception
+        {
+            Error_send_time_message(
+                    std::string __fileEx,
+                    std::size_t __lineEx
+            ) : Exception(
+                    std::string{ "Error send timed message" },
+                    __fileEx,
+                    __lineEx
+                         ) { }
+        };
     }
 }
 

@@ -4,8 +4,14 @@
 #include "ftcl/sheduler/sheduler.hpp"
 #include "ftcl/network.hpp"
 #include "ftcl/timer.hpp"
+#include "ftcl/checkpoint.hpp"
 
 #include <queue>
+#include <condition_variable>
+#include <mutex>
+#include <type_traits>
+#include <experimental/optional>
+#include <chrono>
 
 namespace ftcl
 {
@@ -18,251 +24,236 @@ namespace ftcl
         fail
     };
 
-    class ShedulerWorker : public Sheduler
+    template< typename _TypeTask >
+    class ShedulerWorker : public Sheduler< _TypeTask >
     {
-    protected:
-        using NumWorker = std::size_t;
+        //ftcl_context< _TypeTask > context;
+        std::map< Events, std::function< void( ftcl_context< _TypeTask >&, std::size_t ) > > func;
 
-        NetworkModule::Request reqWorkInit;
-        bool sendedWorkInit{ false };
-        Timer timerWorkInit;
-
-        NetworkModule::Request reqWorkName;
-        bool sendedWorkName{ false };
-        Timer timerWorkName;
-
-        NetworkModule::Request reqShutDown;
-        bool sendedShutDown{ false };
-
-        bool sendedReqTask{ false };
-        NetworkModule::Request reqSendedReqTask;
-        Timer timerReqTask;
-
-        std::size_t timeWorkInit{ 10000 };
+        using Sheduler<_TypeTask>::events;
 
     public:
         ShedulerWorker( )
         {
-            console::Log( ) << console::extensions::Level::Debug2
-                            << "Create sheduler Worker";
+            using namespace console;
+            using namespace console::extensions;
+
+            console::Log( ) << "Create sheduler Worker";
 
             events.emplace( 0, Events::GetInitializeWorker );
             events.emplace( 0, Events::ShutDown );
 
+
+            /*!
+             * 1. Отправка сообщения об инициализации
+             */
             func.emplace(
                 Events::GetInitializeWorker,
-                [ & ]( NumWorker num )
+                [ & ]( ftcl_context< _TypeTask > &context, std::size_t num )
                 {
-                    using namespace console;
-
-                    if( NetworkModule::Instance( ).getError( ) )
-                    {
-                        sendedWorkInit = false;
-                        NetworkModule::Instance( ).cancel( reqWorkInit );
-                        NetworkModule::Instance( ).resetError( );
-                    }
-
-                    if( !sendedWorkInit )
-                    {
-                        timerWorkInit.start( );
-                        reqWorkInit = NetworkModule::Instance( ).send( num, TypeMessage::WorkerInitialize );
-                        sendedWorkInit = true;
+                    if( !context.request_init.sendTimedMessage( num, TypeMessage::WorkerInitialize ) )
                         events.emplace( num, Events::GetInitializeWorker );
-                    }
                     else
                     {
-                        NetworkModule::Status status;
-                        auto test = NetworkModule::Instance( ).test( reqWorkInit, status );
-                        if( test )
-                        {
-                            if( status.MPI_SOURCE != -1 )
-                            {
-                                Log( ) << "worker sended initialize";
-                                events.emplace( 0, Events::GetWorkersName );
-                                return;
-                            }
-                            else
-                            {
-                                sendedWorkInit = false;
-                                NetworkModule::Instance( ).cancel( reqWorkInit );
-                                Log( ) << "Worker cancel! " << NetworkModule::Instance( ).getRank( );
-                            }
-                        }
-
-                        if( timerWorkInit.end( ) < timeWorkInit )
-                            events.emplace( num, Events::GetInitializeWorker );
-                        else
-                        {
-                            NetworkModule::Instance( ).cancel( reqWorkInit );
-                            sendedWorkInit = false;
-                            Log( ) << "Worker don't send init to master!";
-                        }
+                        events.emplace( num, Events::CheckWorkersName );
+                        context.request_init.reset( );
                     }
-
                 } );
 
+            /*!
+             * 2. Проверка запроса мастера для получения имени воркера
+             */
             func.emplace(
-                 Events::GetWorkersName,
-                 [ & ]( NumWorker num )
+                 Events::CheckWorkersName,
+                 [ & ]( ftcl_context< _TypeTask > &context, std::size_t num )
                  {
-                     using namespace console;
-                     if( !sendedWorkName )
+                     bool check;
+                     NetworkModule::Status status;
+                     std::tie( check, status ) = NetworkModule::Instance( ).checkMessage(
+                             num,
+                             TypeMessage::MessageWorkerName
+                        );
+                     if ( check )
                      {
-                         bool check;
-                         NetworkModule::Status status;
-                         std::tie( check, status ) = NetworkModule::Instance( ).checkMessage( 0, TypeMessage::MessageWorkerName );
-                         if( check )
-                         {
-                             NetworkModule::Instance( ).getMessage( status );
-                             timerWorkName.start( );
-                             reqWorkName = NetworkModule::Instance( ).send(
-                                     NetworkModule::Instance( ).getName( ),
-                                     0,
-                                     TypeMessage::requestWorkersName
-                                  );
-                              sendedWorkName = true;
-                         }
+                         NetworkModule::Instance( ).getMessage( status );
                          events.emplace( num, Events::GetWorkersName );
                      }
                      else
-                     {
-                         NetworkModule::Status status;
-                         auto test = NetworkModule::Instance( ).test( reqWorkName, status );
-                         if( test )
-                         {
-                             events.push( std::make_tuple( num, Events::GetReqTask ) );
-                             return;
-                         }
+                         events.emplace( num, Events::CheckWorkersName );
 
-                         if( timerWorkName.end( ) < timeWorkInit )
-                             events.emplace( num, Events::GetWorkersName );
-                         else
-                         {
-                             NetworkModule::Instance( ).cancel( reqWorkName );
-                             sendedWorkName = false;
-                             Log( ) << "Worker don't send name to master!";
-                         }
-                     }
                  } );
 
+            /// 3. Отправка имени воркера на мастера
+            func.emplace(
+                Events::GetWorkersName,
+                [ & ]( ftcl_context< _TypeTask > &context, std::size_t num )
+                {
+                    ///TODO:
+                    //std::this_thread::sleep_for( std::chrono::seconds{ 15 } );
+                    if( !context.request_name.sendTimedMessage( num, TypeMessage::requestWorkersName, NetworkModule::Instance( ).getName( ) ) )
+                        events.emplace( num, Events::GetWorkersName );
+                    else
+                    {
+                        events.emplace( num, Events::GetReqTask );
+                        context.request_name.reset( );
+                        context.request_gettask.reset( );
+                    }
+                } );
+
+            /// 4. Отправка запроса на задачу
             func.emplace(
                 Events::GetReqTask,
-                [ & ]( NumWorker num )
+                [ & ]( ftcl_context< _TypeTask > &context, std::size_t num )
                 {
-                    /// если запрос на задачу еще не был послан
-                    if( !sendedReqTask )
-                    {
-                        /// посылаем запрос на задачу
-                        reqSendedReqTask = NetworkModule::Instance( ).send( 0, TypeMessage::MessageReqTask );
-                        timerReqTask.start( );
-                        sendedReqTask = true;
+                    if( !context.request_gettask.sendTimedMessage( num, TypeMessage::MessageReqTask ) )
                         events.emplace( num, Events::GetReqTask );
-                    }
                     else
                     {
-                        if( timerReqTask.end( ) < timeWorkInit )
-                        {
-                            NetworkModule::Status status;
-                            auto test = NetworkModule::Instance( ).test( reqSendedReqTask, status );
-                            if( test )
-                            {
-                                events.emplace( num, Events::GetTask );
-                                return;
-                            }
-                            else
-                            {
-                                events.emplace( num, Events::GetReqTask );
-                            }
-                        }
-                        else
-                        {
-                            NetworkModule::Instance( ).cancel( reqSendedReqTask );
-                            sendedReqTask = false;
-                            events.emplace( num, Events::GetReqTask );
-                            console::Log( ) << "Doesn't send \"MessageReqTask\"";
-                        }
+                        events.emplace( num, Events::GetTask );
+                        context.request_gettask.reset( );
                     }
                 } );
 
+            /// 5. Получение задачи
             func.emplace(
                     Events::GetTask,
-                    [ & ]( NumWorker num )
+                    [ & ]( ftcl_context< _TypeTask > &context, std::size_t num )
                     {
                         bool check;
                         NetworkModule::Status status;
-                        std::tie( check, status ) = NetworkModule::Instance( ).checkMessage( 0, TypeMessage::MessageTask );
+                        std::tie( check, status ) = NetworkModule::Instance( ).checkMessage( num, TypeMessage::MessageTask );
                         if( check )
                         {
-                            
+                            context.serialized_task = NetworkModule::Instance( ).getMessage( status );
+                            _TypeTask task;
+                            out::Stream stream( context.serialized_task );
+                            stream >> task;
+                            context.thread_task.setTask( std::move( task ) );
+                            events.emplace( num, Events::CheckTask );
                         }
+                        else
+                            events.emplace( num, Events::GetTask );
                     } );
 
-
+            /// 6. Проверка задачи на завершенность
             func.emplace(
-                Events::ShutDown,
-                [ & ]( NumWorker num )
+                Events::CheckTask,
+                [ & ]( ftcl_context< _TypeTask > &context, std::size_t num )
                 {
-                    using namespace console;
-
-                    if( !sendedShutDown )
+                    if( context.thread_task.taskIsReady( ) )
                     {
-                        bool check;
-                        NetworkModule::Status status;
-                        std::tie( check, status ) = NetworkModule::Instance( ).checkMessage(
-                                0,
-                                TypeMessage::MessageShutdownMasterToWorker
-                            );
-                        if( check )
-                        {
-                            NetworkModule::Instance( ).getMessage( status );
-                            Log( ) << "Worker recv shutdown";
-                            std::queue< std::tuple< NumWorker, Events > > q;
-                            events.swap( q );
-                            timerWorkName.start( );
-                            reqShutDown = NetworkModule::Instance( ).send(
-                                    NetworkModule::Instance( ).getName( ),
-                                    0,
-                                    TypeMessage::MessageShutdownWorkerToMaster
-                                );
-                            sendedShutDown = true;
-                        }
-                        events.emplace( num, Events::ShutDown );
+                        auto task = context.thread_task.getTask( );
+                        in::Stream ss;
+                        ss << task;
+                        context.serialized_task = ss.str( );
+                        events.emplace( num, Events::SendOutTask );
+                        context.request_sendouttask.reset( );
                     }
                     else
-                    {
-                        NetworkModule::Status status;
-                        auto test = NetworkModule::Instance( ).test( reqShutDown, status );
-                        if( test )
-                            return;
+                        events.emplace( num, Events::CheckTask );
+                } );
 
-                        if( timerWorkName.end( ) < timeWorkInit )
-                            events.emplace( num, Events::ShutDown );
+            /// 7. Отправка решенной задачи на мастера
+            func.emplace(
+                Events::SendOutTask,
+                [ & ]( ftcl_context< _TypeTask > &context, std::size_t num )
+                {
+                    if( !context.request_sendouttask.sendTimedMessage( num, TypeMessage::MessageTaskResponse, context.serialized_task ) )
+                        events.emplace( num, Events::SendOutTask );
+                    else
+                        events.emplace( num, Events::GetReqTask );
+                } );
+
+            /*!
+             * функция принятия запроса на завершение
+             */
+            func.emplace(
+                Events::ShutDown,
+                [ & ]( ftcl_context< _TypeTask > &context, std::size_t num )
+                {
+                    bool check;
+                    NetworkModule::Status status;
+                    std::tie( check, status ) = NetworkModule::Instance( ).checkMessage(
+                            num,
+                            TypeMessage::MessageShutdownMasterToWorker );
+                    if ( check )
+                    {
+                        NetworkModule::Instance( ).getMessage( status );
+                        if( !context.thread_task.taskIsReady( ) )
+                        {
+                            events.emplace( num, Events::ShutDownWaitTask );
+                        }
                         else
                         {
-                            NetworkModule::Instance( ).cancel( reqShutDown );
-                            sendedShutDown = false;
-                            Log( ) << "Worker don't send shutDown request to master!";
+                            events.emplace( num, Events::ShutDownReq );
                         }
                     }
+                    else
+                        events.emplace( num, Events::ShutDown );
                 } );
+
+            func.emplace(
+                Events::ShutDownWaitTask,
+                [ & ]( ftcl_context< _TypeTask > &context, std::size_t num )
+                {
+                    if( ( !context.thread_task.taskIsReady( ) ) || ( !context.request_sendouttask.checkSended( ) ) )
+                    {
+                        std::this_thread::sleep_for( std::chrono::milliseconds{ 1 } );
+                        events.emplace( num, Events::ShutDownWaitTask );
+                    }
+                    else
+                        events.emplace( num, Events::ShutDownReq );
+                } );
+
+            func.emplace(
+                Events::ShutDownReq,
+                [ & ]( ftcl_context< _TypeTask > &context, std::size_t num )
+                {
+                    if( !context.request_shutdown.sendTimedMessage( num, TypeMessage::MessageShutdownWorkerToMaster ) )
+                        events.emplace( num, Events::ShutDownReq );
+                    else
+                    {
+                        std::queue< std::tuple< std::size_t, Events > > q;
+                        std::swap( q, events );
+                    }
+                } );
+
+            func.emplace(
+                Events::ShutDownForce,
+                [ & ]( ftcl_context< _TypeTask > &context, std::size_t num )
+                {
+                    bool check;
+                    NetworkModule::Status status;
+                    std::tie( check, status ) = NetworkModule::Instance( ).checkMessage(
+                            0,
+                            TypeMessage::MessageShutDownForce );
+                    if ( check )
+                    {
+                        NetworkModule::Instance( ).getMessage( status );
+                        std::queue< std::tuple< std::size_t, Events > > q;
+                        std::swap( q, events );
+                    }
+                    else
+                        events.emplace( num, Events::ShutDownForce );
+                } );
+
         }
 
-        void run( ) override
+        void run( ftcl_context< _TypeTask > &__context )
         {
             using namespace console;
             while ( !events.empty( ) )
             {
-                NumWorker numWorker;
+                std::uint64_t numWorker;
                 Events event;
                 std::tie( numWorker, event ) = events.front( );
                 events.pop( );
-                func[ event ]( numWorker );
+                func[ event ]( __context, numWorker );
             }
+            std::this_thread::sleep_for( std::chrono::seconds{ 1 } );
         }
 
-        ~ShedulerWorker( )
-        {
-        }
+        ~ShedulerWorker( ) = default;
     };
 }
 

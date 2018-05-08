@@ -161,6 +161,15 @@ namespace ftcl
                 return MPI_SUCCESS;
             }
             MPI_Comm_set_errhandler( scomm, MPI_ERRORS_RETURN );
+
+            //MPI_Info mpi_info;
+            //MPI_Info_create( &mpi_info );
+            //MPI_Info_set( mpi_info, "add-host", "ub002" );
+            //MPI_Info_set( mpi_info, "hostfile", "hostfile" );
+            //MPI_Info_set( mpi_info, "add-hostfile", "hostfile" );
+
+            //MPI_Info_set( mpi_info, "host", "ub002" );
+
             auto rc = MPI_Comm_spawn(
                     gargv[ 0 ],
                     &gargv[ 1 ],

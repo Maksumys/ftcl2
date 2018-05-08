@@ -9,22 +9,9 @@
 #include <vector>
 #include <chrono>
 #include <mpi.h>
-
+/*
 namespace ftcl
 {
-    enum class State
-    {
-        idle = 0,
-        initialize,
-        waitingName,
-        waitingReqTask,
-        waitingTask,
-        working,
-        failing,
-        readyToShutDown,
-        shutdowning,
-    };
-
     class _StatusWorker
     {
     public:
@@ -39,6 +26,19 @@ namespace ftcl
 
     };
 
+    class networkInterface
+    {
+    protected:
+        std::vector< _StatusWorker >                    statuses;                       ///< вектор состояний ворверов
+        std::size_t                                     countInitializedWorkers;        ///< количество инициализированных воркеров
+        std::size_t                                     secWaitReq{ 3 };                ///< время ожидания запросов
+        std::size_t                                     countShutDownWorkers{ 0 };      ///< количество завершенных воркеров
+    public:
+        networkInterface(  );
+        explicit networkInterface( std::uint64_t __countWorkers );
+    };
+
+
     class StatusWorker
     {
     public:
@@ -47,23 +47,25 @@ namespace ftcl
         std::size_t secWaitSend{ 3 };
 
         std::size_t countShutDownWorkers{ 0 };
-
-
-        bool TEST{ true };
-
-        
         explicit StatusWorker( const std::uint64_t &__countWorkers );
+
+        bool isInit( std::size_t __numWorkers  );
         bool recvInitialize( std::size_t __numWorkers );
         bool getWorkersName( std::size_t __numWorkers );
-        void printStatusWorkers( );
+        bool getReqTask( std::size_t __numWorkers );
+
         bool shutDown( std::size_t __numWorkers );
-        std::string getWorkerName( std::size_t numWorker );
-        bool isInit( std::size_t __numWorkers  );
+
+
+
         void sendTask( std::size_t numWorker, const std::string &str );
 
         template< typename _TypeTask >
         void getTask( std::size_t numWorker, _TypeTask &task );
+
+        void printStatusWorkers( );
+        std::string getWorkerName( std::size_t numWorker );
     };
 
-}
+}*/
 #endif

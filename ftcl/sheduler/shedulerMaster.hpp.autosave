@@ -67,7 +67,7 @@ namespace ftcl
                     {
                         Log( ) << console::extensions::Level::Info << "Checkpoint found!";
                         checkpoint.open( );
-                        auto tasks = checkpoint.load( getContext( ) );
+                        checkpoint.load( getContext( ) );
                     }
                     else
                     {

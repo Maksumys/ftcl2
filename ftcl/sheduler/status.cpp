@@ -1,5 +1,5 @@
 #include "ftcl/sheduler/status.hpp"
-
+/*
 namespace ftcl
 {
     StatusWorker::StatusWorker( const std::uint64_t &__countWorkers )
@@ -34,12 +34,6 @@ namespace ftcl
 
     bool StatusWorker::getWorkersName( const std::size_t __numWorkers )
     {
-        if( TEST )
-        {
-            std::this_thread::sleep_for( std::chrono::seconds{ 10 } );
-            TEST = false;
-        }
-
         if( __numWorkers >= NetworkModule::Instance( ).getSize( ) )
             throw exception::Illegal_rank( __FILE__, __LINE__ );
         if( ( statuses[ __numWorkers - 1 ].state != State::initialize ) &&
@@ -87,16 +81,6 @@ namespace ftcl
                 statuses[ __numWorkers - 1 ].state = State::failing;
             }
 
-            /*if( NetworkModule::Instance( ).getError( ) )
-            {
-                auto proc = NetworkModule::Instance( ).getFailingProc( );
-                for( auto &elem : proc )
-                {
-                    statuses[ elem - 1 ] = _StatusWorker{ };
-                }
-                return false;
-            }*/
-
             return check;
         }
 
@@ -109,45 +93,7 @@ namespace ftcl
         return false;
     }
 
-    void StatusWorker::printStatusWorkers( )
-    {
-        using console::Log;
-        std::string str;
-        str += "\n\nStatus workers:\n";
-        int i = 0;
-        for( const auto &elem : statuses )
-        {
-            switch( elem.state )
-            {
-                case State::idle:
-                    str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state idle\n";
-                    break;
-                case State::waitingName:
-                    str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state waitingName\n";
-                    break;
-                case State::waitingTask:
-                    str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state waitingTask\n";
-                    break;
-                case State::initialize:
-                    str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state initialize\n";
-                    break;
-                case State::working:
-                    str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state working\n";
-                    break;
-                case State::failing:
-                    str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state failing\n";
-                    break;
-                case State::shutdowning:
-                    str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state shutdowning\n";
-                    break;
-                case State::readyToShutDown:
-                    str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state readyToShutDown\n";
-                    break;
-            }
-            i++;
-        }
-        Log( ) << str + "\n\n";
-    }
+
 
     std::string StatusWorker::getWorkerName( std::size_t __numWorker )
     {
@@ -207,6 +153,19 @@ namespace ftcl
         return statuses[ __numWorkers - 1 ].isInit;
     }
 
+    bool StatusWorker::getReqTask( std::size_t __numWorkers )
+    {
+        if( __numWorkers >= NetworkModule::Instance( ).getSize( ) )
+            throw exception::Illegal_rank( __FILE__, __LINE__ );
+
+        /*
+        if( statuses[ __numWorkers - 1 ].state != )
+        {
+
+        }
+
+    }
+
     template< typename _TypeTask >
     void StatusWorker::getTask( std::size_t __numWorkers, _TypeTask &task )
     {
@@ -233,4 +192,4 @@ namespace ftcl
             /// отправление задачи ( входных параметров для задачи )
         }
     }
-}
+*/
