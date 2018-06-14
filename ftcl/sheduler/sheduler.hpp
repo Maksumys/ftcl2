@@ -41,6 +41,7 @@ namespace ftcl
         bool notified{ false };
         bool is_run{ true };
         _Task task;
+        std::uint64_t num_task;
     public:
         thread( )
         {
@@ -55,10 +56,11 @@ namespace ftcl
             cond_var.notify_all( );
         }
 
-        void setTask( _Task &&__task )
+        void setTask( _Task &&__task, const std::uint64_t __num_task )
         {
             std::unique_lock<std::mutex> lock( mutex );
             task = std::move( __task );
+            num_task = __num_task;
             notified = true;
             cond_var.notify_all( );
         }
@@ -71,6 +73,11 @@ namespace ftcl
         _Task getTask( )
         {
             return task;
+        }
+
+        std::uint64_t getNumTask( )
+        {
+            return num_task;
         }
 
         void run( )
@@ -228,34 +235,34 @@ namespace ftcl
                 switch( elem.state )
                 {
                     case State::idle:
-                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state idle\n";
+                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + elem.name + "  state idle\n";
                         break;
                     case State::waitingName:
-                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state waitingName\n";
+                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + elem.name + "  state waitingName\n";
                         break;
                     case State::waitingTask:
-                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state waitingTask\n";
+                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + elem.name + "  state waitingTask\n";
                         break;
                     case State::initialize:
-                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state initialize\n";
+                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + elem.name + "  state initialize\n";
                         break;
                     case State::working:
-                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state working\n";
+                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + elem.name + "  state working\n";
                         break;
                     case State::failing:
-                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state failing\n";
+                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + elem.name + "  state failing\n";
                         break;
                     case State::shutdowning:
-                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state shutdowning\n";
+                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + elem.name + "  state shutdowning\n";
                         break;
                     case State::readyToShutDown:
-                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state readyToShutDown\n";
+                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + elem.name + "  state readyToShutDown\n";
                         break;
                     case State::waitingReqTask:
-                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state waitingReqTask\n";
+                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + elem.name + "  state waitingReqTask\n";
                         break;
                     case State::waitingTaskSer:
-                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + NetworkModule::Instance( ).getName( ) + "  state waitingTaskSer\n";
+                        str += "[NumWorker " + std::to_string( i + 1 ) + "]  Name " + elem.name + "  state waitingTaskSer\n";
                         break;
                 }
                 i++;
@@ -294,17 +301,17 @@ namespace ftcl
     class master_context
     {
     public:
-        Status                              statuses;           ///< статусы воркеров
+        Status                              statuses;                       ///< статусы воркеров
 
-        std::queue< _TypeTask >             paramTasks;         ///< очередь задач
+        std::queue< std::tuple< _TypeTask, std::uint64_t > > paramTasks;    ///< очередь задач
 
-        std::queue< _TypeTask >             paramOutTasks;      ///< очередь решенных задач
+        std::queue< std::tuple< _TypeTask, std::uint64_t > > paramOutTasks; ///< очередь решенных задач
 
-        std::size_t                         count_sended_task;  ///< количество отправленных задач
-        std::size_t                         count_out_task;     ///< количество решенных задач
-        std::size_t                         count_task;         ///< количество задач
-        std::size_t                         cout_failed_workers;///< количество умерших воркеров
-        std::size_t                         count_shutdown;     ///< количество завершенных мастеров
+        std::size_t                         count_sended_task;              ///< количество отправленных задач
+        std::size_t                         count_out_task;                 ///< количество решенных задач
+        std::size_t                         count_task;                     ///< количество задач
+        std::size_t                         cout_failed_workers;            ///< количество умерших воркеров
+        std::size_t                         count_shutdown;                 ///< количество завершенных мастеров
         bool                                isShutDown{ false };            ///< пользователь инициировал завершение программы
         bool                                isEnableCheckPoint{ false };    ///< создание контрольных точек
     };

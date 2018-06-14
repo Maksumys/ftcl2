@@ -15,15 +15,6 @@
 
 namespace ftcl
 {
-    enum class WorkerState
-    {
-        idle,
-        reqworking,
-        working,
-        shutDown,
-        fail
-    };
-
     template< typename _TypeTask >
     class ShedulerWorker : public Sheduler< _TypeTask >
     {
@@ -127,7 +118,9 @@ namespace ftcl
                             context.serialized_task = NetworkModule::Instance( ).getMessage( status );
                             _TypeTask task;
                             out::Stream stream( context.serialized_task );
+                            std::uint64_t num_task;
                             stream >> task;
+                            stream >> num_task;
                             context.thread_task.setTask( std::move( task ) );
                             events.emplace( num, Events::CheckTask );
                         }
@@ -143,8 +136,10 @@ namespace ftcl
                     if( context.thread_task.taskIsReady( ) )
                     {
                         auto task = context.thread_task.getTask( );
+                        auto num_task = context.thread_task.getNumTask( );
                         in::Stream ss;
                         ss << task;
+                        ss << num_task;
                         context.serialized_task = ss.str( );
                         events.emplace( num, Events::SendOutTask );
                         context.request_sendouttask.reset( );

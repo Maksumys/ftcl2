@@ -36,6 +36,13 @@ namespace ftcl
                 thread -> join( );
         }
 
+        void enableCheckPoint( const std::string &__file_name )
+        {
+            context->isEnableCheckPoint = true;
+            checkpoint.setName( __file_name );
+            events.emplace( 0, Events::InitializeCheckPoint );
+        }
+
         explicit ShedulerMaster( )
         {
             using namespace console;
@@ -56,9 +63,6 @@ namespace ftcl
 
             events.emplace( 0, Events::CheckStatus );
 
-            if( context->isEnableCheckPoint )
-                events.emplace( 0, Events::InitializeCheckPoint );
-
             func.emplace(
                 Events::InitializeCheckPoint,
                 [ & ]( std::uint64_t numWorker )
@@ -66,16 +70,13 @@ namespace ftcl
                     if( checkpoint.findCheckPoint( ) )
                     {
                         Log( ) << console::extensions::Level::Info << "Checkpoint found!";
-                        checkpoint.open( );
-                        auto tasks = checkpoint.load( getContext( ) );
+                        checkpoint.load( getContext( ) );
                     }
                     else
                     {
                         Log( ) << console::extensions::Level::Warning << "Checkpoint not found!";
                     }
                 } );
-
-
 
             /// 1. Ожидание инициализации воркеров
             func.emplace(
@@ -225,7 +226,8 @@ namespace ftcl
                                         if( !context->paramTasks.empty( ) )
                                         {
                                             in::Stream stream;
-                                            stream << context->paramTasks.front( );
+                                            stream << std::get< 0 >( context->paramTasks.front( ) );
+                                            stream << std::get< 1 >( context->paramTasks.front( ) );
                                             context->statuses.getWorkerFromNumNode( numWorker ).serialized_task = stream.str( );
                                             context->paramTasks.pop( );
                                             events.emplace( numWorker, Events::SendTask );
@@ -280,9 +282,11 @@ namespace ftcl
                                 {
                                     /// помещаем задачу обратно
                                     _TypeTask task;
+                                    std::uint64_t num_task = 0;
                                     out::Stream stream( context->statuses.getWorkerFromNumNode( numWorker ).serialized_task );
                                     stream >> task;
-                                    context->paramTasks.push( task );
+                                    stream >> num_task;
+                                    context->paramTasks.emplace( task, num_task );
 
                                     context->statuses.getWorkerFromNumNode( numWorker ).state = State::failing;
                                     context->statuses.printStatusWorkers( );
@@ -297,9 +301,11 @@ namespace ftcl
 
                                 /// помещаем задачу обратно
                                 _TypeTask task;
+                                std::uint64_t num_task = 0;
                                 out::Stream stream( context->statuses.getWorkerFromNumNode( numWorker ).serialized_task );
                                 stream >> task;
-                                context->paramTasks.push( task );
+                                stream >> num_task;
+                                context->paramTasks.emplace( task, num_task );
 
                                 throw exception::Illegal_state_worker( __FILE__, __LINE__ );
                             }
@@ -322,9 +328,19 @@ namespace ftcl
                                         auto serializedOutTask = NetworkModule::Instance( ).getMessage( status );
 
                                         _TypeTask task;
+                                        std::uint64_t num_task = 0;
                                         out::Stream stream( serializedOutTask );
                                         stream >> task;
-                                        context->paramOutTasks.push( task );
+                                        stream >> num_task;
+                                        context->paramOutTasks.emplace( task, num_task );
+
+
+                                        /// сохранение в контрольную точку
+                                        if( context->isEnableCheckPoint )
+                                        {
+                                            checkpoint.save( task, num_task );
+                                        }
+
 
                                         context->count_out_task++;
                                         context->statuses.getWorkerFromNumNode( numWorker ).serialized_task = " ";
@@ -344,9 +360,11 @@ namespace ftcl
 
                                     /// помещаем задачу обратно
                                     _TypeTask task;
+                                    std::uint64_t num_task = 0;
                                     out::Stream stream( context->statuses.getWorkerFromNumNode( numWorker ).serialized_task );
                                     stream >> task;
-                                    context->paramTasks.push( task );
+                                    stream >> num_task;
+                                    context->paramTasks.emplace( task, num_task );
                                     throw exception::Illegal_state_worker( __FILE__, __LINE__ );
                                 }
                             }
@@ -425,7 +443,7 @@ namespace ftcl
 
         void setTask( _TypeTask &&task )
         {
-            context->paramTasks.push( task );
+            context->paramTasks.push( std::make_tuple( task, context->count_task ) );
             context->count_task++;
         }
 
@@ -437,7 +455,7 @@ namespace ftcl
 
         _TypeTask getTask( )
         {
-            _TypeTask task = context->paramOutTasks.front( );
+            _TypeTask task = std::get< 0 >( context->paramOutTasks.front( ) );
             context->paramOutTasks.pop( );
             return task;
         }
@@ -472,9 +490,11 @@ namespace ftcl
                     else
                     {
                         _TypeTask task;
+                        std::uint64_t num_task;
                         out::Stream stream( context->statuses.getWorkerFromNumNode( numWorker ).serialized_task );
                         stream >> task;
-                        context->paramTasks.push( task );
+                        stream >> num_task;
+                        context->paramTasks.emplace( task, num_task );
                         Log( ) << "Delete events numWorker = " << numWorker << " event = " << ( int ) event;
                     }
                     events.pop( );

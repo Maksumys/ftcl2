@@ -76,16 +76,17 @@ class CheckPoint
 protected:
     std::string     file_name;
     std::string     file_checkpoint_data;
-    std::fstream    file_stream;
+    std::ifstream   file_stream;
+    std::ofstream   file_stream_out;
 
 public:
     CheckPoint( ) = default;
 
-    CheckPoint( const std::string __file_name ) : file_name( __file_name )
+    CheckPoint( const std::string &__file_name ) : file_name( __file_name )
     {
     }
 
-    void setName( const std::string __file_name )
+    void setName( const std::string &__file_name )
     {
         file_name = __file_name;
     }
@@ -100,28 +101,38 @@ public:
 
     void open( )
     {
-        file_stream.open( file_name, std::ios::in | std::ios::out | std::ios::app );
+        file_stream.open( file_name );
     }
 
     std::vector< _Task > load( std::shared_ptr< ftcl::master_context< _Task > > context )
     {
-        boost::archive::binary_oarchive oa( file_stream );
+        file_stream.open( file_name );
+        if( !file_stream )
+            throw std::exception( );
+
+        boost::archive::binary_iarchive oa( file_stream );
 
         _Task t;
+        std::uint64_t num_task;
         std::vector< _Task > tasks;
 
         while( !file_stream.eof( ) )
         {
             oa >> t;
+            oa >> num_task;
             tasks.push_back( t );
         }
+        file_stream.close( );
     }
 
-    void save( const _Task &__task )
+    void save( const _Task &__task, const std::uint64_t __num_task )
     {
+        file_stream_out.open( file_name );
         in::Stream stream;
         stream << __task;
-        file_stream << stream.str( );
+        stream << __num_task;
+        file_stream_out << stream.str( );
+        file_stream_out.close( );
     }
 
     //_Task load( )

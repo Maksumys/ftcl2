@@ -37,9 +37,9 @@ namespace ftcl
     {
         std::unique_lock lock( mutex );
         gargv = argv;
-        int initialized;
-        MPI_Initialized( &initialized );
-        if( initialized == 0 )
+        //int initialized;
+        //MPI_Initialized( &initialized );
+        //if( initialized == 0 )
         {
             MPI_Init( &argc, &argv );
             MPI_Comm_get_parent( &world );
@@ -56,12 +56,12 @@ namespace ftcl
 
 
                 /// заполнение таблицы виртуальных номеров процессов
-                for( std::size_t i = 0; i < size; i++ )
+                for( int i = 0; i < size; i++ )
                     virtual_ranks.emplace( i, i );
             }
             else
             {
-                MPIX_Comm_replace( MPI_COMM_NULL, &world );
+                //MPIX_Comm_replace( MPI_COMM_NULL, &world );
                 MPI_Comm_size( world, &size );
                 MPI_Comm_rank( world, &rank );
                 MPI_Comm_set_errhandler( world, MPI_ERRORS_RETURN );
@@ -89,6 +89,7 @@ namespace ftcl
 
     int NetworkModule::MPIX_Comm_replace( MPI_Comm comm, MPI_Comm *newcomm )
     {
+        std::cout << "qwe " << std::endl;
         int oldrank = rank;
         MPI_Comm icomm; // коммуникатор после очищение но до добавления процессов
         MPI_Comm scomm; // локальный коммуникатор для каждой стороны icomm???восстановленных
@@ -109,9 +110,6 @@ namespace ftcl
             MPIX_Comm_failure_get_acked( comm, &group_f );
             int nf;
             MPI_Group_size( group_f, &nf );
-            int err;
-            int len;
-            char errstr[ MPI_MAX_ERROR_STRING ];
             MPI_Group group_c;
             std::vector< int > ranks_gf( nf );
             std::vector< int > ranks_gc( nf );
@@ -162,19 +160,29 @@ namespace ftcl
             }
             MPI_Comm_set_errhandler( scomm, MPI_ERRORS_RETURN );
 
-            //MPI_Info mpi_info;
-            //MPI_Info_create( &mpi_info );
-            //MPI_Info_set( mpi_info, "add-host", "ub002" );
+            MPI_Info mpi_info;
+            MPI_Info_create( &mpi_info );
+            MPI_Info_set( mpi_info, "host", "ub002" );
             //MPI_Info_set( mpi_info, "hostfile", "hostfile" );
             //MPI_Info_set( mpi_info, "add-hostfile", "hostfile" );
 
             //MPI_Info_set( mpi_info, "host", "ub002" );
 
+            console::Log( ) << "IN REPLACE: " << NetworkModule::getName( );
+
+            //if( NetworkModule::getName( ) == "ub002" )
+            //{
+            //    std::this_thread::sleep_for( std::chrono::seconds{ 5 } );
+            //}
+
+            std::ofstream stream( "file" + std::to_string( NetworkModule::Instance( ).getRank( ) ) );
+            stream << "nd = " << nd << "\n";
+
             auto rc = MPI_Comm_spawn(
-                    gargv[ 0 ],
-                    &gargv[ 1 ],
+                    "testapp",
+                    MPI_ARGV_NULL,
                     nd,
-                    MPI_INFO_NULL,
+                    mpi_info,
                     0,
                     scomm,
                     &icomm,
@@ -261,7 +269,7 @@ namespace ftcl
         if( __toRank == rank )
             throw exception::Attempt_to_send_to_oneself( __FILE__, __LINE__ );
         MPI_Request request;
-        while( true )
+        //while( true )
         {
             std::unique_lock< std::mutex > guard( mutex );
             auto rc = MPI_Issend(
@@ -277,8 +285,8 @@ namespace ftcl
             {
                 spawn( );
             }
-            else
-                break;
+            //else
+            //    break;
         }
         return request;
     }
@@ -292,7 +300,7 @@ namespace ftcl
         if( __toRank == rank )
             throw exception::Attempt_to_send_to_oneself( __FILE__, __LINE__ );
         MPI_Request request;
-        while( true )
+        //while( true )
         {
             std::unique_lock< std::mutex > guard( mutex );
             auto rc = MPI_Issend(
@@ -308,8 +316,8 @@ namespace ftcl
             {
                 spawn( );
             }
-            else
-                break;
+            //else
+            //    break;
         }
         return request;
     }
@@ -320,7 +328,7 @@ namespace ftcl
         )
     {
         std::string buf;
-        while( true )
+        //while( true )
         {
             std::unique_lock< std::mutex > guard( mutex );
             int count;
@@ -343,8 +351,8 @@ namespace ftcl
             {
                 spawn( );
             }
-            else
-                break;
+            //else
+            //    break;
         }
         return buf;
     }
@@ -353,7 +361,7 @@ namespace ftcl
     {
         int testVar = 0;
         int rc = 0;
-        while( true )
+        //while( true )
         {
             std::unique_lock< std::mutex > guard( mutex );
             rc = MPI_Test( &request, &testVar, &status );
@@ -361,8 +369,8 @@ namespace ftcl
             {
                 spawn( );
             }
-            else
-                break;
+            //else
+            //    break;
         }
 
         if( ( testVar == 1 ) && ( rc == MPI_SUCCESS ) )
@@ -375,14 +383,14 @@ namespace ftcl
 
     void NetworkModule::cancel(NetworkModule::Request &request)
     {
-        while( true )
+        //while( true )
         {
             std::unique_lock< std::mutex > guard( mutex );
             auto rc = MPI_Cancel( &request );
             if( rc != MPI_SUCCESS )
                 spawn( );
-            else
-                break;
+            //else
+            //    break;
         }
     }
 
@@ -397,7 +405,7 @@ namespace ftcl
     {
         MPI_Status status;
         int messageFounded;
-        while( true )
+        //while( true )
         {
             std::unique_lock< std::mutex > guard( mutex );
             int rc = MPI_Iprobe(
@@ -411,8 +419,8 @@ namespace ftcl
             {
                 spawn( );
             }
-            else
-                break;
+            //else
+            //    break;
         }
         return std::make_tuple( messageFounded == 1, status );
     };
@@ -425,7 +433,7 @@ namespace ftcl
 
         MPI_Status status;
         int messageFounded;
-        while( true )
+        //while( true )
         {
             std::unique_lock< std::mutex > guard( mutex );
             int rc;
@@ -449,8 +457,8 @@ namespace ftcl
             {
                 spawn( );
             }
-            else
-                break;
+            //else
+            //    break;
         }
         return std::make_tuple( messageFounded == 1, status );
     }
@@ -467,7 +475,7 @@ namespace ftcl
             throw exception::Illegal_rank( __FILE__, __LINE__ );
 
         MPI_Request request;
-        while( true )
+        //while( true )
         {
             std::unique_lock< std::mutex > guard( mutex );
             auto rc = MPI_Issend(
@@ -481,8 +489,8 @@ namespace ftcl
             );
             if( rc != MPI_SUCCESS )
                 spawn( );
-            else
-                break;
+            //else
+            //    break;
         }
         return request;
     }
@@ -496,17 +504,17 @@ namespace ftcl
     {
         std::unique_lock< std::mutex > guard( mutex );
         auto start = std::chrono::steady_clock::now( );
-        while( true )
+        //while( true )
         {
             int testVar;
             auto rc = MPI_Test( &request, &testVar, &status );
             if( rc != MPI_SUCCESS )
                 spawn( );
-            else
-                break;
+            //else
+            //    break;
 
-            if( testVar != 0 )
-                break;
+            //if( testVar != 0 )
+            //    break;
 
             std::this_thread::sleep_for( std::chrono::microseconds( 10 ) );
             auto end = std::chrono::steady_clock::now( );

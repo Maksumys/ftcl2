@@ -19,8 +19,6 @@ set(
         sheduler/sheduler.hpp
         sheduler/shedulerMaster.hpp
         sheduler/shedulerWorker.hpp
-        sheduler/status.hpp
-        sheduler/status.cpp
         timer.hpp
         task/task.hpp
         gui_server.cpp
@@ -57,7 +55,7 @@ if(MPI_CXX_FOUND)
     set(NETWORK_ON)
 endif()
 
-find_package(Boost 1.66.0 COMPONENTS system)
+find_package(Boost 1.67 COMPONENTS system serialization)
 
 add_library(${PROJECT_NAME} SHARED ${HEADERS})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${FTCL_LIBRARIES} ${Boost_LIBRARIES} )
